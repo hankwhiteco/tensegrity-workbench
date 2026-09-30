@@ -1,0 +1,1095 @@
+<title>Tensegrity Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument panel on the left, the structure fills the rest; verification and cut list sit under the panel. */
+:root {
+  --paper: #eceef0;
+  --panel: #f7f8f9;
+  --ink: #16191d;
+  --muted: #5d6670;
+  --rule: #d3d8dd;
+  --accent: #a4621c;       /* brass: selection, active controls */
+  --accent-ink: #ffffff;
+  --pass: #2f7d4f;
+  --fail: #b3362c;
+  --warn: #9a6a00;
+  --field: #ffffff;
+  /* viewport is always dark: white rods on black, like the studio photos */
+  --vp-bg: #0b0c0e;
+  --vp-strut: #f2f0ea;
+  --vp-cable: #9aa6b2;
+  --vp-sel: #e39a45;
+  --vp-tension: #e39a45;
+  --vp-compress: #7fb6e8;
+  --vp-text: #8b949e;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121417; --panel: #181b1f; --ink: #e7eaed; --muted: #98a2ad; --rule: #2a2f35;
+    --accent: #e39a45; --accent-ink: #1a1206; --pass: #5cc28a; --fail: #ef6d62; --warn: #e0b24a; --field: #0f1113;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121417; --panel: #181b1f; --ink: #e7eaed; --muted: #98a2ad; --rule: #2a2f35;
+  --accent: #e39a45; --accent-ink: #1a1206; --pass: #5cc28a; --fail: #ef6d62; --warn: #e0b24a; --field: #0f1113;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.45; }
+* { box-sizing: border-box; }
+.app { display: grid; grid-template-columns: 340px 1fr; height: 100%; min-height: 0; }
+aside { background: var(--panel); border-right: 1px solid var(--rule); overflow-y: auto; padding-block: 20px 28px; padding-inline: 20px; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+header h1 { font-family: var(--display); font-stretch: 118%; font-weight: 700; font-size: 21px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 34ch; }
+section h2 { font-family: var(--display); font-stretch: 110%; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 0 0 10px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+label.f { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+select, input[type="number"], input[type="text"] { font: inherit; font-size: 13px; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; min-width: 0; }
+input[type="number"] { font-family: var(--mono); font-variant-numeric: tabular-nums; width: 100%; }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; background: var(--field); color: var(--ink); border: 0; padding: 5px 10px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.btn { font: inherit; font-size: 12px; font-weight: 600; background: var(--field); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.presets { display: grid; gap: 6px; }
+.presets .btn { text-align: left; font-weight: 500; display: grid; gap: 1px; }
+.presets .btn small { color: var(--muted); font-weight: 400; font-size: 11px; }
+table.groups { width: 100%; border-collapse: collapse; }
+table.groups td { padding: 4px 0; vertical-align: middle; }
+table.groups td:first-child { width: 58%; }
+.swatch { display: inline-block; width: 16px; height: 0; border-top: 1px solid var(--muted); vertical-align: middle; margin-right: 8px; }
+.swatch.s { border-top: 4px solid var(--ink); border-radius: 2px; }
+.hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.sel { border: 1px solid var(--accent); border-radius: 6px; padding: 12px; display: grid; gap: 10px; }
+.sel .t { font-weight: 600; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+main { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: 1fr auto auto; }
+.rbar { display: flex; align-items: center; gap: 12px; padding-block: 6px; padding-inline: 20px; background: var(--panel); border-top: 1px solid var(--rule); font-size: 12px; }
+.rbar .sum { font-family: var(--display); font-stretch: 110%; font-weight: 600; font-size: 13px; }
+.rbar .sum.ok { color: var(--pass); } .rbar .sum.no { color: var(--fail); }
+.rbar .btn { margin-left: auto; padding: 3px 10px; }
+.rbar .sum:empty { display: none; }
+.app.full { grid-template-columns: 1fr; }
+.app.full aside { display: none; }
+.vp { position: relative; background: var(--vp-bg); min-height: 0; overflow: hidden; }
+canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+canvas.drag { cursor: grabbing; }
+.vp .tl { position: absolute; left: 16px; top: 14px; color: var(--vp-text); font-family: var(--mono); font-size: 12px; pointer-events: none; }
+.vp .tl b { color: var(--vp-strut); font-family: var(--display); font-stretch: 115%; font-size: 15px; font-weight: 600; display: block; margin-bottom: 2px; }
+.vp .tr { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.vp .tr button { font: inherit; font-size: 12px; background: rgba(255,255,255,0.06); color: var(--vp-strut); border: 1px solid rgba(255,255,255,0.16); border-radius: 4px; padding: 5px 9px; cursor: pointer; }
+.vp .tr button[aria-pressed="true"] { border-color: var(--vp-sel); color: var(--vp-sel); }
+.dpanel { position: absolute; right: 12px; top: 48px; width: 260px; max-width: calc(100% - 24px); background: rgba(12,13,15,0.92); border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; display: grid; gap: 10px; color: var(--vp-text); font-family: var(--mono); font-size: 12px; z-index: 2; }
+.dpanel label { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; }
+.dpanel label input { grid-column: 1 / -1; width: 100%; accent-color: var(--vp-sel); }
+.dpanel label span { color: var(--vp-strut); font-variant-numeric: tabular-nums; }
+.dpanel .hintd { font-family: var(--body); font-size: 11px; line-height: 1.4; }
+.vp .legend { position: absolute; left: 16px; bottom: 12px; color: var(--vp-text); font-size: 11px; font-family: var(--mono); display: flex; gap: 14px; pointer-events: none; }
+.vp .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+.anim { position: absolute; left: 16px; right: 16px; bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--vp-text); font-family: var(--mono); font-size: 12px; }
+.anim button { font: inherit; background: rgba(255,255,255,0.06); color: var(--vp-strut); border: 1px solid rgba(255,255,255,0.16); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.anim .aspeed { display: inline-flex; align-items: center; gap: 8px; }
+.anim .aspeed input[type="range"] { flex: 0 0 140px; min-width: 100px; }
+.anim .aspeed span { min-width: 3.2em; color: var(--vp-strut); font-variant-numeric: tabular-nums; }
+.anim input[type="range"] { flex: 1 1 160px; min-width: 120px; accent-color: var(--vp-sel); }
+.anim .cap { flex: 1 1 100%; order: -1; color: var(--vp-strut); font-family: var(--display); font-stretch: 110%; font-size: 14px; }
+.anim .cap small { color: var(--vp-text); font-family: var(--mono); font-size: 11px; margin-left: 8px; }
+.busy { position: absolute; right: 16px; bottom: 12px; font-family: var(--mono); font-size: 11px; color: var(--vp-sel); }
+
+.report { background: var(--panel); border-top: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0; max-height: 44vh; overflow-y: auto; }
+.report > div { padding: 16px 20px; min-width: 0; }
+.report > div + div { border-left: 1px solid var(--rule); }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.checks li { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: baseline; }
+.pill { font-family: var(--mono); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; text-align: center; padding: 2px 0; border-radius: 3px; border: 1px solid currentColor; }
+.pill.ok { color: var(--pass); } .pill.no { color: var(--fail); } .pill.warn { color: var(--warn); } .pill.info { color: var(--muted); }
+.checks .d { font-size: 13px; }
+.checks .d small { display: block; color: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+.verdict { font-family: var(--display); font-stretch: 112%; font-weight: 700; font-size: 16px; margin: 0 0 12px; }
+.verdict.ok { color: var(--pass); } .verdict.no { color: var(--fail); }
+table.cut { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.cut th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 8px 6px 0; border-bottom: 1px solid var(--rule); }
+table.cut td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.cut td:first-child { font-family: var(--body); }
+table.cut td.n { text-align: right; }
+.bench td { font-size: 12px; }
+.copyrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+textarea.out { width: 100%; height: 90px; font-family: var(--mono); font-size: 11px; background: var(--field); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; margin-top: 8px; }
+.src { font-size: 11.5px; color: var(--muted); }
+.src a { color: inherit; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; height: auto; }
+  aside { border-right: 0; border-bottom: 1px solid var(--rule); order: 2; overflow: visible; }
+  main { order: 1; grid-template-rows: 62vh auto auto; }
+  .app.full { grid-template-columns: 1fr; }
+  .app.full main { grid-template-rows: 88vh auto auto; }
+  .report { grid-template-columns: 1fr; max-height: none; }
+  .report > div + div { border-left: 0; border-top: 1px solid var(--rule); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <aside>
+    <header>
+      <h1>Tensegrity Workbench</h1>
+      <p>Set the cable lengths. The struts grow until the cable web stops them. Every result is checked for equilibrium and stability.</p>
+    </header>
+
+    <section>
+      <h2>Structure</h2>
+      <div class="grid2">
+        <label class="f">Family
+          <select id="family">
+            <option value="sphere">Sphere (repeating pattern)</option>
+            <option value="prism">Prism (n struts)</option>
+            <option value="tower">Snelson tower</option>
+            <option value="tetra">Truncated tetrahedron · 6</option>
+            <option value="octa">Truncated octahedron · 12</option>
+            <option value="cube">Truncated cube · 12</option>
+            <option value="icosa">Truncated icosahedron · 30</option>
+            <option value="dodeca">Truncated dodecahedron · 30</option>
+            <option value="icosa6">Expanded octahedron · 6</option>
+          </select>
+        </label>
+        <label class="f" id="nwrap">Struts per module
+          <input id="n" type="number" min="3" max="12" step="1" value="3">
+        </label>
+        <label class="f" id="fwrap" hidden>Repeats
+          <select id="f"></select>
+        </label>
+        <label class="f" id="pwrap" hidden>Pattern
+          <select id="pat">
+            <option value="geo">Ring joints</option>
+            <option value="gold">Triangle joints</option>
+          </select>
+        </label>
+        <label class="f" id="kwrap" hidden>Modules
+          <input id="k" type="number" min="2" max="10" step="1" value="4">
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="hint" style="margin:0">Twist</span>
+        <div class="seg" role="group" aria-label="Twist direction">
+          <button id="chirR" aria-pressed="true">Right</button><button id="chirL" aria-pressed="false">Left</button>
+        </div>
+        <label class="f" style="margin-left:auto; grid-auto-flow: column; align-items:center; gap:6px">Units
+          <input id="units" type="text" value="cm" style="width:56px">
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Member lengths</h2>
+      <table class="groups"><tbody id="groups"></tbody></table>
+      <p class="hint">Cables are fixed lengths. Struts marked grow share one scale and keep these ratios. Click any member in the view to set it on its own.</p>
+    </section>
+
+    <section id="selbox" hidden>
+      <h2>Selected member</h2>
+      <div class="sel" id="sel"></div>
+    </section>
+
+    <section>
+      <h2>From Pars' pages</h2>
+      <div class="presets">
+        <button class="btn" id="pDiss">Dissimilar 3-strut<small>Cables 20.44, two struts fixed at 26.0. Pars finds 36.3 for the third.</small></button>
+        <button class="btn" id="pTetra">Truncated tetrahedron<small>Rings b = 20, cross cables c = 20. Compared with his eq. 18–22.</small></button>
+        <button class="btn" id="pTetraC">Tetrahedron, long cross cables<small>b = 20, c = 30. Longer c, longer struts.</small></button>
+      </div>
+      <p class="src">Method from Marcelo Pars, <a href="http://www.tensegriteit.nl/e-wiskunde4.html" target="_blank" rel="noopener">tetrahedron</a> and <a href="http://www.tensegriteit.nl/e-wiskunde5.html" target="_blank" rel="noopener">dissimilar</a>.</p>
+    </section>
+
+    <section>
+      <h2>Build check</h2>
+      <label class="f">Strut diameter (for clearance)
+        <input id="dia" type="number" min="0" step="0.1" value="1.2">
+      </label>
+    </section>
+  </aside>
+
+  <main>
+    <div class="vp">
+      <canvas id="cv" aria-label="3D view of the tensegrity. Drag to rotate, scroll to zoom, click a member to select it."></canvas>
+      <div class="tl"><b id="vpName">3-strut prism</b><span id="vpSub"></span></div>
+      <div class="tr">
+        <button id="bScale" aria-pressed="true" title="Keep one scale while you change repeats, so the sphere visibly grows">Fixed scale</button>
+        <button id="bBuild" aria-pressed="false" title="Watch the structure go together, one repeat at a time">Build</button>
+        <button id="bSpin" aria-pressed="true">Rotate</button>
+        <button id="bForce" aria-pressed="false">Forces</button>
+        <button id="bNodes" aria-pressed="false">Node ids</button>
+        <button id="bReset">Reset view</button>
+        <button id="bDisplay" aria-pressed="false" aria-expanded="false" aria-controls="dpanel">Display</button>
+        <button id="bFull" aria-pressed="false" title="Hide the side and lower panels so the structure fills the window">Full view</button>
+      </div>
+      <div class="dpanel" id="dpanel" hidden>
+        <label>Depth shading <span id="shVal">100%</span><input type="range" id="shade" min="0" max="150" value="100" aria-label="Depth shading"></label>
+        <label>Cable brightness <span id="cbVal">100%</span><input type="range" id="cable" min="20" max="200" value="100" aria-label="Cable brightness"></label>
+        <label>Give <span id="gvVal2">1×</span><input type="range" id="give2" min="0" max="300" value="100" aria-label="Elastic give"></label>
+        <div class="hintd">0% shading draws every line the same, near or far. Above 100%, cables blend toward the strut colour.</div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="anim" id="anim" hidden>
+        <div class="cap" id="aCap"></div>
+        <button id="aPlay">Pause</button>
+        <input type="range" id="aScrub" min="0" max="1000" value="0" aria-label="Build timeline">
+        <label class="aspeed">Speed <input type="range" id="aSpeed" min="0" max="1000" value="400" aria-label="Build speed"> <span id="aSpeedVal">1×</span></label>
+        <label class="aspeed" title="How much the pattern flexes along its own soft directions while it forms">Give <input type="range" id="aGive" min="0" max="300" value="100" aria-label="Elastic give"> <span id="aGiveVal">1×</span></label>
+        <button id="aClose">Close</button>
+      </div>
+      <div class="busy" id="busy" hidden>Solving…</div>
+    </div>
+    <div class="rbar">
+      <span class="sum" id="rbSum"></span>
+      <button class="btn" id="bDetails" aria-expanded="true" aria-controls="report">Hide details</button>
+    </div>
+    <div class="report" id="report">
+      <div>
+        <p class="verdict" id="verdict">…</p>
+        <ul class="checks" id="checks"></ul>
+        <div class="copyrow" id="tightWrap" hidden><button class="btn primary" id="bTight">Tighten slack cables</button><span class="hint" id="tightNote" style="margin:0;align-self:center"></span></div>
+      </div>
+      <div>
+        <h2 style="font-family:var(--display);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px">Cut list</h2>
+        <table class="cut"><thead><tr><th>Member</th><th class="n">Qty</th><th class="n">Length</th><th class="n">Force</th></tr></thead><tbody id="cut"></tbody></table>
+        <div id="extra"></div>
+        <div class="copyrow">
+          <button class="btn" id="cpCsv">Copy cut list</button>
+          <button class="btn" id="cpJson">Copy model JSON</button>
+        </div>
+        <textarea class="out" id="out" readonly hidden aria-label="Exported data"></textarea>
+      </div>
+      <div>
+        <h2 style="font-family:var(--display);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px">Solver benchmarks</h2>
+        <table class="cut bench"><thead><tr><th>Case</th><th class="n">Published</th><th class="n">Here</th></tr></thead><tbody id="bench"><tr><td colspan="3">Running…</td></tr></tbody></table>
+        <p class="hint">Run live in your browser on load, with the same solver used above.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script id="tgsrc">
+/*SOLVER*/
+</script>
+<script>
+(function () {
+'use strict';
+const $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+// ---------- worker ----------
+const workerSrc = $('tgsrc').textContent + `
+self.onmessage = e => {
+  const { id, model, bench, tight } = e.data;
+  if (bench) { self.postMessage({ id, bench: runBench() }); return; }
+  if (tight) { try { const o = TG.tighten(model); self.postMessage({ id, tight: o && { lens: o.members.map(m => m.len), changed: o.changed } }); } catch (err) { self.postMessage({ id, tight: null }); } return; }
+  try {
+    const { r, v } = TG.solveModel(model);
+    self.postMessage({ id, r, v });
+  } catch (err) { self.postMessage({ id, error: String(err && err.message || err) }); }
+};
+function res(s, over) { return { P: s.P, members: s.members.map((m, i) => { const g = s.groups[m.group], o = (over && over[i]) || {}; return { ...m, len: o.len ?? g.len, mode: o.mode ?? g.mode, ratio: o.ratio ?? g.ratio }; }) }; }
+function runBench() {
+  const out = [];
+  { const s = TG.prism(3); ['bot','top','side'].forEach(g => s.groups[g].len = 20.44);
+    const st = s.members.map((m, i) => m.kind === 's' ? i : -1).filter(i => i >= 0);
+    const over = { [st[0]]: { mode: 'fixed', len: 26 }, [st[1]]: { mode: 'fixed', len: 26 } };
+    const r = TG.formFind(res(s, over)); out.push(['Dissimilar 3-strut, long strut', '36.3', r.lengths[st[2]].toFixed(3)]); }
+  for (const c of [1, 1.5]) { const s = TG.truncated('tetra'); s.groups.cross.len = c;
+    const r = TG.formFind(res(s)); const k = s.members.findIndex(m => m.kind === 's');
+    out.push(['Truncated tetra, b = 1, c = ' + c, TG.parsTetra(1, c).s.toFixed(5) + '*', r.lengths[k].toFixed(5)]); }
+  for (const n of [3, 5]) { const s = TG.prism(n); if (n >= 5) s.groups.side.len = 1.5; const r = TG.formFind(res(s));
+    const a = Math.atan2(r.P[0][1], r.P[0][0]), b = Math.atan2(r.P[n][1], r.P[n][0]);
+    let tw = Math.abs((b - a) * 180 / Math.PI); if (tw > 180) tw = 360 - tw;
+    out.push([n + '-prism twist angle', (90 - 180 / n).toFixed(2) + '°', tw.toFixed(2) + '°']); }
+  { const s = TG.icosa6(); const r = TG.formFind(res(s)); const k = s.members.findIndex(m => m.kind === 's');
+    out.push(['Expanded octahedron, strut / cable', Math.sqrt(8 / 3).toFixed(5), r.lengths[k].toFixed(5)]); }
+  return out;
+}`;
+let worker = null, jobId = 0, latest = 0;
+if (location.hash !== '#noworker') { // #noworker: run inline (used by the headless smoke test)
+  try { worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }))); } catch (e) { worker = null; }
+}
+function runJob(msg, cb) {
+  const id = ++jobId;
+  if (!worker) { // fallback: run inline
+    setTimeout(() => {
+      if (msg.bench) { cb({ bench: [] }); return; }
+      if (msg.tight) { const o = TG.tighten(msg.model); cb({ tight: o && { lens: o.members.map(m => m.len), changed: o.changed } }); return; }
+      try { cb(TG.solveModel(msg.model)); }
+      catch (err) { cb({ error: String(err && err.message || err) }); }
+    }, 0);
+    return id;
+  }
+  const h = e => { if (e.data.id !== id) return; worker.removeEventListener('message', h); cb(e.data); };
+  worker.addEventListener('message', h);
+  worker.postMessage({ ...msg, id });
+  return id;
+}
+
+// ---------- state ----------
+const S = {
+  family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
+  struct: null, over: {}, sel: -1,
+  result: null, verify: null, model: null,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
+};
+const BASE = 20; // default cable length in user units
+
+function build() {
+  let s;
+  if (S.family === 'sphere') {
+    const [m, n] = TG.SPHERE_SIZES[S.f], T = m * m + m * n + n * n;
+    const base = S.pat === 'gold' ? TG.goldbergMN(m, n) : TG.geodesicMN(m, n);
+    s = TG.ringSphere(base.V, base.E, (S.pat === 'gold' ? 'Triangle-joint' : 'Ring-joint') + ' sphere, ' + 30 * T + ' struts', 1);
+    s.groups.ring.label = S.pat === 'gold' ? 'Joint triangles (b)' : 'Joint rings (b)';
+    s.groups.cross.label = 'Cross cables (c)';
+  }
+  else if (S.family === 'prism') s = TG.prism(S.n);
+  else if (S.family === 'tower') s = TG.tower(S.n, S.k);
+  else if (S.family === 'icosa6') s = TG.icosa6();
+  else s = TG.truncated(S.family);
+  for (const g of Object.values(s.groups)) if (g.kind === 'c') g.len = +(g.len * BASE).toFixed(3);
+  if (S.chir < 0) s.P = s.P.map(p => [-p[0], p[1], p[2]]);
+  if (S.family === 'sphere') { const [m, n] = TG.SPHERE_SIZES[S.f]; s.repeats = Math.sqrt(m * m + m * n + n * n); }
+  S.struct = s; S.over = {}; S.sel = -1;
+}
+function model() {
+  const s = S.struct;
+  return { P: s.P, members: s.members.map((m, i) => { const g = s.groups[m.group], o = S.over[i] || {}; return { a: m.a, b: m.b, kind: m.kind, group: m.group, len: o.len ?? g.len, mode: o.mode ?? g.mode, ratio: o.ratio ?? g.ratio }; }) };
+}
+
+let solveTimer = 0;
+function solveSoon(delay = 200) { clearTimeout(solveTimer); solveTimer = setTimeout(solve, delay); }
+function solve() {
+  const md = model(), st = S.struct;
+  $('busy').hidden = false; $('busy').textContent = 'Solving…';
+  latest = runJob({ model: md }, data => {
+    if (data.id !== undefined && data.id !== latest) return;
+    const r = data.r;
+    const finite = r && r.P.every(p => p.every(Number.isFinite)) && Number.isFinite(data.v.equilibrium);
+    if (data.error || !finite) {
+      $('busy').textContent = 'Could not solve these lengths. Showing the last good result.';
+      return;
+    }
+    $('busy').hidden = true;
+    S.model = md; S.shown = st; S.result = r; S.verify = data.v;
+    if (S.sel >= md.members.length) S.sel = -1;
+    if (ANIM.on) stopBuild();
+    fitView(); renderReport(); renderSel();
+    if (!ANIM.autoDone && S.shown.repeats && !reduce.matches) { ANIM.autoDone = true; startBuild(); }
+  });
+}
+
+// ---------- panel ----------
+function renderGroups() {
+  const s = S.struct, tb = $('groups'); tb.innerHTML = '';
+  for (const [id, g] of Object.entries(s.groups)) {
+    const count = s.members.filter(m => m.group === id).length;
+    const tr = document.createElement('tr');
+    const val = g.kind === 'c' ? g.len : g.ratio;
+    tr.innerHTML = `<td><span class="swatch ${g.kind}"></span>${g.label} <span class="mono" style="color:var(--muted)">×${count}</span></td>
+      <td><label class="f" style="display:block"><span class="sr" hidden>${g.label}</span>
+      <input type="number" id="g_${id}" step="${g.kind === 'c' ? 0.1 : 0.05}" min="0.01" value="${val}" aria-label="${g.label} ${g.kind === 'c' ? 'length' : 'ratio'}"></label></td>`;
+    tb.appendChild(tr);
+    const inp = tr.querySelector('input');
+    if (g.kind === 's') inp.title = 'Relative length of growing struts';
+    inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v > 0)) return; if (g.kind === 'c') g.len = v; else g.ratio = v; solveSoon(); });
+  }
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td colspan="2" class="hint" style="padding-top:2px">Cable values in ${esc(S.units)}. Strut value is a ratio (grow).</td>`;
+  tb.appendChild(tr);
+}
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function fmt(v, d = 3) { return Number.isFinite(v) ? v.toFixed(d) : '–'; }
+
+function renderSel() {
+  const box = $('selbox'), el = $('sel');
+  if (S.sel < 0 || !S.result) { box.hidden = true; return; }
+  box.hidden = false;
+  const m = S.model.members[S.sel], L = S.result.lengths[S.sel], T = S.result.tension[S.sel];
+  const g = S.shown.groups[m.group];
+  const isS = m.kind === 's';
+  const q = S.verify.q[S.sel];
+  el.innerHTML = `<div class="row"><span class="t">${isS ? 'Strut' : 'Cable'} ${S.sel}</span><span class="mono" style="color:var(--muted)">nodes ${m.a}–${m.b} · ${esc(g.label)}</span></div>
+    <div class="row mono" style="gap:16px"><span>${fmt(L)} ${esc(S.units)}</span><span style="color:var(--muted)">force ${fmt(Math.abs(q * L) / maxForce(), 3)} ${isS ? 'compression' : 'tension'}</span></div>
+    ${isS ? `<div class="row"><div class="seg" role="group" aria-label="Strut length mode"><button id="mGrow" aria-pressed="${m.mode === 'grow'}">Grow</button><button id="mFix" aria-pressed="${m.mode === 'fixed'}">Fixed</button></div>
+      <input type="number" id="selLen" step="0.1" min="0.01" style="width:110px" value="${m.mode === 'fixed' ? m.len : fmt(L)}" ${m.mode === 'grow' ? 'disabled' : ''} aria-label="Fixed strut length"></div>`
+    : `<div class="row"><label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Length <input type="number" id="selLen" step="0.1" min="0.01" style="width:110px" value="${m.len}"></label></div>`}
+    <div class="row"><button class="btn" id="selReset">Use group value</button><button class="btn" id="selClose">Deselect</button></div>`;
+  const i = S.sel;
+  if (isS) {
+    $('mGrow').onclick = () => { S.over[i] = { ...(S.over[i] || {}), mode: 'grow' }; delete S.over[i].len; solveSoon(0); };
+    $('mFix').onclick = () => { S.over[i] = { ...(S.over[i] || {}), mode: 'fixed', len: +L.toFixed(3) }; solveSoon(0); };
+  }
+  $('selLen').addEventListener('change', e => { const v = parseFloat(e.target.value); if (!(v > 0)) return; S.over[i] = { ...(S.over[i] || {}), len: v }; if (isS) S.over[i].mode = 'fixed'; solveSoon(0); });
+  $('selReset').onclick = () => { delete S.over[i]; solveSoon(0); };
+  $('selClose').onclick = () => { S.sel = -1; renderSel(); };
+}
+function maxForce() { const r = S.result; if (!r) return 1; let m = 0; S.verify.q.forEach((q, k) => m = Math.max(m, Math.abs(q * r.lengths[k]))); return m || 1; }
+
+function renderReport() {
+  const v = S.verify, r = S.result, md = S.model;
+  const ok = !r.runaway && v.equilibrium < 1e-5 && v.slack === 0 && v.badStrut === 0 && v.prestressStable;
+  const clearOk = v.clearance > S.dia;
+  let maxDev = 0; md.members.forEach((m, k) => { if (m.kind === 'c') maxDev = Math.max(maxDev, Math.abs(r.lengths[k] - m.len) / m.len); });
+  const vd = $('verdict');
+  if (r.runaway) { vd.textContent = 'Struts are not held'; vd.className = 'verdict no'; }
+  else { vd.textContent = ok ? (clearOk ? 'Valid tensegrity' : 'Valid, but struts touch') : 'Not a valid tensegrity'; vd.className = 'verdict ' + (ok && clearOk ? 'ok' : 'no'); }
+  $('rbSum').textContent = $('report').hidden ? vd.textContent : ''; $('rbSum').className = 'sum ' + (vd.className.includes(' ok') ? 'ok' : 'no');
+  const rows = [];
+  const add = (st, title, detail) => rows.push(`<li><span class="pill ${st}">${{ ok: 'pass', no: 'fail', warn: 'check', info: 'info' }[st]}</span><span class="d">${title}<small>${detail}</small></span></li>`);
+  if (r.runaway) add('no', 'Cable web holds the struts', 'Struts grew without limit. Some node has no cable holding it in a direction.');
+  add(v.equilibrium < 1e-5 ? 'ok' : 'no', 'Every node is in equilibrium', `max force residual ${v.equilibrium.toExponential(1)} of the largest force`);
+  add(v.slack === 0 ? 'ok' : 'no', 'All cables in tension', v.slack ? `${v.slack} slack cable${v.slack > 1 ? 's' : ''}: shorten them or they carry nothing` : `${md.members.filter(m => m.kind === 'c').length} cables taut`);
+  add(v.badStrut === 0 ? 'ok' : 'no', 'All struts in compression', v.badStrut ? `${v.badStrut} strut${v.badStrut > 1 ? 's' : ''} not pushing` : `${md.members.filter(m => m.kind === 's').length} struts pushing`);
+  add(maxDev < 1e-3 ? 'ok' : 'warn', 'Cable lengths match your input', `largest stretch ${(maxDev * 100).toFixed(4)}%`);
+  const band = v.method === 'band';
+  add(v.prestressStable ? 'ok' : 'no', 'Prestress stable', band
+    ? (v.prestressStable ? `stiffness matrix factors cleanly (Cholesky, ${r.P.length * 3} unknowns): every motion but rigid ones is resisted` : 'stiffness matrix does not factor: some motion is not resisted')
+    : (v.mech ? `${v.mech} mechanism${v.mech > 1 ? 's' : ''} in the bare frame, all stiffened by prestress (min ${fmt(v.minMech, 3)})` : 'no mechanisms, rigid as a frame'));
+  add(v.superStable ? 'ok' : 'info', 'Super stable', v.superStable ? 'stress matrix is positive semidefinite with only the 4 required zero directions: stable at any prestress level and any material stiffness' : 'stress matrix check failed: stability depends on material stiffness or prestress level');
+  add(clearOk ? 'ok' : 'warn', 'Struts clear each other', `closest pair ${fmt(v.clearance, 2)} ${esc(S.units)} apart (centre lines) vs diameter ${S.dia}`);
+  if (v.selfStress !== null && v.selfStress !== undefined) add('info', 'Self-stress states', `${v.selfStress} (a single one means the force pattern is unique up to scale)`);
+  if (r.repeatUnits) add('info', 'Repeat unit', `solved ${r.repeatUnits * 3 + 1} unknowns for one sixtieth of the sphere, then rotated by the 60 icosahedral turns`);
+  $('checks').innerHTML = rows.join('');
+  $('tightWrap').hidden = !(v.slack > 0 && !r.runaway);
+  $('tightNote').textContent = 'Shortens each slack cable to just under its span, then solves again.';
+
+  // cut list, by group, then by distinct length
+  const mf = maxForce();
+  const bins = [];
+  md.members.forEach((m, k) => {
+    const L = r.lengths[k], key = m.group + ':' + L.toFixed(2);
+    let b = bins.find(x => x.key === key);
+    if (!b) { b = { key, label: S.shown.groups[m.group].label, kind: m.kind, L, n: 0, f: 0 }; bins.push(b); }
+    b.n++; b.f = Math.max(b.f, Math.abs(v.q[k] * L) / mf);
+  });
+  bins.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 's' ? -1 : 1) || b.L - a.L);
+  $('cut').innerHTML = bins.map(b => `<tr><td><span class="swatch ${b.kind}"></span>${esc(b.label)}</td><td class="n">${b.n}</td><td class="n">${fmt(b.L)} ${esc(S.units)}</td><td class="n">${fmt(b.f, 2)}</td></tr>`).join('');
+  S.bins = bins;
+  let extra = '';
+  if (S.shown.name.endsWith('prism')) {
+    const n = r.P.length / 2, P = r.P;
+    const c0 = centroid(P.slice(0, n)), c1 = centroid(P.slice(n));
+    const ax = norm3(sub3(c1, c0));
+    const u = projPerp(sub3(P[0], c0), ax), w = projPerp(sub3(P[n], c1), ax);
+    const ang = Math.acos(Math.max(-1, Math.min(1, dot3(u, w) / Math.hypot(...u) / Math.hypot(...w)))) * 180 / Math.PI;
+    extra = `<p class="hint">Twist between rings ${ang.toFixed(2)}° (regular prism: 90° − 180°/n = ${(90 - 180 / n).toFixed(2)}°). Height ${fmt(Math.hypot(...sub3(c1, c0)))} ${esc(S.units)}.</p>`;
+  }
+  if (S.shown.groups.ring && S.shown.name.startsWith('Truncated tetra') && !Object.keys(S.over).length) {
+    const b = S.shown.groups.ring.len, c = S.shown.groups.cross.len;
+    const p = TG.parsTetra(b, c);
+    extra = `<p class="hint">Pars eq. 18–22 with b = ${b}, c = ${c}: s = ${p.s.toFixed(4)} at φ = ${(p.phi * 180 / Math.PI).toFixed(2)}°.</p>`;
+  }
+  extra += `<p class="hint">Force column is relative to the largest member force.</p>`;
+  if (v.classes && v.classes.length) {
+    const cl = v.classes, show = cl.slice(0, 8);
+    const row = c => { const st = c.forces.filter(x => x.kind === 's'), cb = c.forces.filter(x => x.kind === 'c'), sf = st.length ? st[0].f : 1;
+      return `<tr><td class="n">${c.count}</td><td class="n">${st.length ? '1.000' : '–'}</td><td>${cb.map(x => (x.f / sf).toFixed(3)).join(' · ')}</td></tr>`; };
+    extra += `<h2 style="font-family:var(--display);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:16px 0 6px">Joint types · ${cl.length}</h2>
+      <p class="hint" style="margin:0 0 6px">Joints with identical forces. At each, the strut push is set to 1 and the cable pulls are shown as ratios.</p>
+      <table class="cut"><thead><tr><th class="n">Joints</th><th class="n">Strut</th><th>Cables</th></tr></thead><tbody>${show.map(row).join('')}</tbody></table>
+      ${cl.length > show.length ? `<p class="hint">${cl.length - show.length} more joint types.</p>` : ''}`;
+  }
+  $('extra').innerHTML = extra;
+  const sCount = md.members.filter(m => m.kind === 's').length;
+  $('vpName').textContent = S.shown.name;
+  let dia = 0; const cc = centroid(r.P); r.P.forEach(p => dia = Math.max(dia, 2 * Math.hypot(...sub3(p, cc))));
+  $('vpSub').textContent = `${sCount} struts · ${md.members.length - sCount} cables · ${r.P.length} joints · ${fmt(dia, 1)} ${S.units} across`;
+}
+function centroid(ps) { const c = [0, 0, 0]; ps.forEach(p => { c[0] += p[0] / ps.length; c[1] += p[1] / ps.length; c[2] += p[2] / ps.length; }); return c; }
+function sub3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function dot3(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function norm3(a) { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+function projPerp(v, ax) { const d = dot3(v, ax); return [v[0] - ax[0] * d, v[1] - ax[1] * d, v[2] - ax[2] * d]; }
+
+$('bTight').onclick = () => {
+  if (!S.model) return;
+  const st = S.struct, md = S.model;
+  $('bTight').disabled = true; $('tightNote').textContent = 'Tightening…';
+  latest = runJob({ tight: true, model: { P: S.result.P, members: md.members } }, data => {
+    $('bTight').disabled = false;
+    if (!data.tight) { $('tightNote').textContent = 'Could not make every cable taut. Try shorter lengths by hand.'; return; }
+    if (st !== S.struct) return;
+    data.tight.changed.forEach(k => { S.over[k] = { ...(S.over[k] || {}), len: data.tight.lens[k] }; });
+    solveSoon(0);
+  });
+};
+
+// ---------- exports ----------
+function csv() {
+  const rows = [['member', 'qty', 'length_' + S.units, 'relative_force']];
+  S.bins.forEach(b => rows.push([b.label, b.n, b.L.toFixed(4), b.f.toFixed(4)]));
+  return rows.map(r => r.join(',')).join('\n');
+}
+function json() {
+  const r = S.result, md = S.model;
+  return JSON.stringify({
+    name: S.shown.name, units: S.units,
+    nodes: r.P.map(p => p.map(x => +x.toFixed(6))),
+    members: md.members.map((m, k) => ({ a: m.a, b: m.b, type: m.kind === 's' ? 'strut' : 'cable', group: m.group, length: +r.lengths[k].toFixed(6), forceDensity: +S.verify.q[k].toFixed(6) })),
+    checks: { equilibrium: S.verify.equilibrium, prestressStable: S.verify.prestressStable, superStable: S.verify.superStable, mechanisms: S.verify.mech, selfStress: S.verify.selfStress },
+  }, null, 1);
+}
+function copy(text, btn) {
+  const out = $('out'); out.value = text; out.hidden = false;
+  const done = ok => { const t = btn.textContent; btn.textContent = ok ? 'Copied' : 'Select and copy below'; setTimeout(() => btn.textContent = t, 1600); if (!ok) { out.focus(); out.select(); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), () => done(false)); else done(false);
+}
+$('cpCsv').onclick = e => copy(csv(), e.currentTarget);
+$('cpJson').onclick = e => copy(json(), e.currentTarget);
+
+// ---------- viewport ----------
+const cv = $('cv'), ctx = cv.getContext('2d');
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let colors = {};
+function readColors() { colors = { bg: css('--vp-bg'), strut: css('--vp-strut'), cable: css('--vp-cable'), sel: css('--vp-sel'), ten: css('--vp-tension'), com: css('--vp-compress'), text: css('--vp-text') }; }
+readColors();
+let fit = { c: [0, 0, 0], r: 1, target: 1 };
+function fitView() {
+  const P = S.result.P, c = centroid(P); let r = 0; P.forEach(p => r = Math.max(r, Math.hypot(...sub3(p, c))));
+  r = r || 1;
+  // spheres: radius grows about linearly with repeats, so hold the scale of the 270-strut sphere until you pass it
+  const reps = S.shown.repeats;
+  const target = S.fixedScale && reps ? r * Math.max(1, 3 / reps) : r;
+  const first = !fit.seen;
+  let sl = 0, sn = 0; S.model.members.forEach((m, k) => { if (m.kind === 's') { sl += S.result.lengths[k]; sn++; } });
+  fit = { c, r: first || reduce.matches ? target : fit.r, target, seen: true, strut: sn ? sl / sn : 0 };
+}
+function resize() { const d = window.devicePixelRatio || 1, b = cv.getBoundingClientRect(); cv.width = Math.round(b.width * d); cv.height = Math.round(b.height * d); }
+new ResizeObserver(resize).observe(cv); resize();
+
+function animZoom() { const zp = ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
+function project(p) {
+  const { yaw, pitch, zoom } = S.view;
+  let x = p[0] - fit.c[0], y = p[1] - fit.c[1], z = p[2] - fit.c[2];
+  // z-up world: yaw about z, then pitch about x
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  let X = cy * x - sy * y, Y = sy * x + cy * y, Z = z;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const Y2 = cp * Y - sp * Z, Z2 = sp * Y + cp * Z;
+  const zb = animZoom();
+  const W = cv.width, H = cv.height, s = Math.min(W, H) * 0.40 / fit.r * zoom * zb;
+  const dist = fit.r * 4.2, persp = dist / (dist + Y2);
+  let ox = 0, oy = 0;
+  const zp = ANIM.on && ANIM.plan && ANIM.plan.zoom;
+  if (zp && zp.focus && zp.amount > 1 && !project.inner) { // aim at the first pattern while close in
+    project.inner = true; const f = project(zp.focus); project.inner = false;
+    const w = (zb - 1) / (zp.amount - 1); ox = w * (f[0] - W / 2); oy = w * (f[1] - H / 2);
+  }
+  return [W / 2 + X * s * persp - ox, H / 2 - Z2 * s * persp - oy, Y2];
+}
+let hover = -1;
+const isCable = g => g.m.kind !== 's';
+function mixColor(a, b, t) {
+  const hex = c => { c = c.replace('#', ''); if (c.length === 3) c = c.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16)); };
+  try { const A = hex(a), B = hex(b); return 'rgb(' + A.map((x, i) => Math.round(x + (B[i] - x) * t)).join(',') + ')'; } catch (e) { return a; }
+}
+function draw() {
+  const W = cv.width, H = cv.height, d = window.devicePixelRatio || 1;
+  ctx.fillStyle = colors.bg; ctx.fillRect(0, 0, W, H);
+  if (!S.result) return;
+  const fr = ANIM.on && ANIM.plan ? animFrame(ANIM.t) : null;
+  let base = fr ? fr.P : S.result.P;
+  if (!fr && ANIM.give > 0 && !reduce.matches && S.shown && S.shown.repeats) base = applyGive(S.result.P.map(p => p.slice()), GIVE_T + IDLE_OFF, () => GIVE_REST, GIVE_REST, null);
+  const P = base.map(project), md = S.model, v = S.verify;
+  let segs = md.members.map((m, k) => ({ k, m, a: P[m.a], b: P[m.b], z: (P[m.a][2] + P[m.b][2]) / 2 }));
+  if (fr) {
+    // faint ghost of the finished structure, so each piece has a visible place to go
+    const Pg = S.result.P.map(project);
+    ctx.globalAlpha = fr.ghost; ctx.strokeStyle = colors.strut; ctx.lineWidth = d; ctx.beginPath();
+    md.members.forEach(m => { if (m.kind === 's') { ctx.moveTo(Pg[m.a][0], Pg[m.a][1]); ctx.lineTo(Pg[m.b][0], Pg[m.b][1]); } });
+    ctx.stroke(); ctx.globalAlpha = 1;
+    segs = segs.filter(g => fr.alpha[g.k] > 0.001);
+  }
+  segs.sort((x, y) => y.z - x.z);
+  const zs = P.map(p => p[2]), zmin = Math.min(...zs), zmax = Math.max(...zs);
+  const mf = maxForce();
+  ctx.lineCap = 'round';
+  for (const s of segs) {
+    const depth = zmax > zmin ? (s.z - zmin) / (zmax - zmin) : 0.5; // 0 near, 1 far
+    const alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * (isCable(s) ? Math.min(1, S.cable) : 1);
+    const isS = s.m.kind === 's';
+    const f = Math.abs(v.q[s.k] * S.result.lengths[s.k]) / mf;
+    // rods drawn about 1/40 of their length thick, like the reference sculpture
+    const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d));
+    let col = isS ? colors.strut : colors.cable, w = isS ? rod : 1.1;
+    if (S.force) { col = isS ? colors.com : colors.ten; w = isS ? 2 + 6 * f : 0.6 + 2.8 * f; }
+    if (s.k === S.sel || s.k === hover) { col = colors.sel; }
+    if (!isS && v.q[s.k] <= 1e-9) { ctx.setLineDash([4 * d, 4 * d]); } else ctx.setLineDash([]);
+    const fa = fr ? fr.alpha[s.k] : 1;
+    ctx.globalAlpha = (s.k === S.sel ? 1 : alpha) * fa;
+    if (!isS && S.cable > 1 && !S.force && col === colors.cable) col = mixColor(colors.cable, colors.strut, Math.min(1, S.cable - 1));
+    ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : (fr ? fr.cw[s.k] : 1));
+    ctx.beginPath();
+    const cv3 = fr && fr.curve[s.k], sk3 = fr && fr.stroke[s.k];
+    if (sk3) { // strut drawing itself out from a joint
+      const a3 = fr.P[sk3.from], b3 = fr.P[sk3.to], tip = project([0, 1, 2].map(d => a3[d] + (b3[d] - a3[d]) * sk3.r)), a2 = project(a3);
+      ctx.moveTo(a2[0], a2[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
+      ctx.save(); ctx.globalAlpha = sk3.thin ? 0.5 * fa : 0.9; ctx.fillStyle = colors.strut; ctx.beginPath(); ctx.arc(tip[0], tip[1], (sk3.thin ? 1 : 1.6) * d, 0, 7); ctx.fill(); ctx.restore();
+      ctx.beginPath();
+    } else if (cv3) { // thread still unspooling or slack: draw it as a curve, only as far as it has reached
+      const c = project(cv3.ctl), n = 18, upto = Math.max(1, Math.round(n * cv3.reveal));
+      const A2 = cv3.rev ? s.b : s.a, B2 = cv3.rev ? s.a : s.b;
+      ctx.moveTo(A2[0], A2[1]);
+      for (let i = 1; i <= upto; i++) { const u = i / n, w0 = (1 - u) * (1 - u), w1 = 2 * u * (1 - u), w2 = u * u; ctx.lineTo(w0 * A2[0] + w1 * c[0] + w2 * B2[0], w0 * A2[1] + w1 * c[1] + w2 * B2[1]); }
+    } else { ctx.moveTo(s.a[0], s.a[1]); ctx.lineTo(s.b[0], s.b[1]); }
+    ctx.stroke();
+    if (fr && fr.glow[s.k] > 0.01) { // pieces that just arrived glow, then cool to their normal colour
+      ctx.globalAlpha = fa * fr.glow[s.k]; ctx.strokeStyle = colors.sel; ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+  if (fr && fr.marks.length) { // joint markers
+    ctx.strokeStyle = colors.strut; ctx.lineWidth = 0.8 * d;
+    const rr = (fit.strut || 1) * 0.022;
+    for (const mk of fr.marks) {
+      const c = fr.P[mk.n], l = Math.hypot(...c) || 1, n = c.map(v => v / l);
+      const ref = Math.abs(n[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+      let u = [n[1] * ref[2] - n[2] * ref[1], n[2] * ref[0] - n[0] * ref[2], n[0] * ref[1] - n[1] * ref[0]]; const ul = Math.hypot(...u); u = u.map(v => v / ul);
+      const w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+      const r = rr * (mk.big ? 1 : 0.8);
+      ctx.globalAlpha = 0.45 * mk.a; ctx.beginPath();
+      for (let i = 0; i <= 20; i++) { const a = i / 20 * 2 * Math.PI, q = project([0, 1, 2].map(d3 => c[d3] + r * (Math.cos(a) * u[d3] + Math.sin(a) * w[d3]))); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (S.nodes) {
+    ctx.font = `${11 * d}px "IBM Plex Mono", monospace`; ctx.fillStyle = colors.text;
+    P.forEach((p, i) => ctx.fillText(i, p[0] + 5 * d, p[1] - 5 * d));
+  }
+}
+function pick(mx, my) {
+  if (!S.result) return -1;
+  const d = window.devicePixelRatio || 1, x = mx * d, y = my * d;
+  const P = S.result.P.map(project);
+  let best = -1, bd = 10 * d, bz = Infinity;
+  S.model.members.forEach((m, k) => {
+    const a = P[m.a], b = P[m.b], dx = b[0] - a[0], dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    const px = a[0] + dx * t, py = a[1] + dy * t, dd = Math.hypot(x - px, y - py) - (m.kind === 's' ? 3 * d : 0);
+    const z = a[2] + (b[2] - a[2]) * t;
+    if (dd < bd - 2 * d || (dd < bd + 2 * d && z < bz)) { bd = Math.max(dd, 0); best = k; bz = z; }
+  });
+  return best;
+}
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  const b = cv.getBoundingClientRect();
+  if (drag) {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy);
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.moved > 3) { cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.5, Math.min(1.5, S.view.pitch + dy * 0.008)); }
+  } else { hover = ANIM.on ? -1 : pick(e.clientX - b.left, e.clientY - b.top); }
+});
+cv.addEventListener('pointerup', e => {
+  cv.classList.remove('drag');
+  if (drag && drag.moved <= 3 && !ANIM.on) { const b = cv.getBoundingClientRect(); S.sel = pick(e.clientX - b.left, e.clientY - b.top); renderSel(); }
+  drag = null;
+});
+cv.addEventListener('pointerleave', () => { hover = -1; });
+cv.addEventListener('wheel', e => { e.preventDefault(); S.view.zoom = Math.max(0.3, Math.min(5, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
+
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+if (reduce.matches) S.spin = false;
+function toggle(id, key, after) { const b = $(id); b.setAttribute('aria-pressed', S[key]); b.onclick = () => { S[key] = !S[key]; b.setAttribute('aria-pressed', S[key]); after && after(); }; }
+toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes');
+$('bReset').onclick = () => { S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
+function legend() {
+  $('legend').innerHTML = S.force
+    ? `<span><i style="background:var(--vp-compress)"></i>compression</span><span><i style="background:var(--vp-tension);height:2px"></i>tension (width = force)</span>`
+    : `<span><i style="background:var(--vp-strut)"></i>strut</span><span><i style="background:var(--vp-cable);height:1px"></i>cable</span><span>dashed = slack</span>`;
+}
+legend();
+// ---------- build animation ----------
+// One repeat unit goes in strut by strut. It is then swung 72 degrees round the nearest five-fold axis
+// four times (a flower of 5), and the flower is swung out to the other 11 five-fold axes: 60 copies.
+const ANIM = { on: false, playing: false, t: 0, plan: null, autoDone: false, speed: 1, give: 1 };
+{ const v = parseFloat(store.get('tw.give2')); if (v >= 0 && v <= 3) ANIM.give = v; }
+{ const v = parseFloat(store.get('tw.speed')); if (v >= 0.25 && v <= 8) ANIM.speed = v; }
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+function axisAngle(R) {
+  const ang = Math.acos(Math.max(-1, Math.min(1, (R[0] + R[4] + R[8] - 1) / 2)));
+  let ax = [R[7] - R[5], R[2] - R[6], R[3] - R[1]]; const l = Math.hypot(...ax);
+  if (l > 1e-6) ax = ax.map(x => x / l);
+  else if (ang < 1e-6) ax = [0, 0, 1];
+  else { const dg = [R[0], R[4], R[8]], k = dg.indexOf(Math.max(...dg)); ax = [0, 1, 2].map(i => (R[3 * i + k] + (i === k ? 1 : 0)) / 2); const n = Math.hypot(...ax); ax = ax.map(x => x / n); }
+  return { ax, ang };
+}
+function makePlan() {
+  const md = S.model, P = S.result.P, M = md.members.length, N = P.length;
+  const strutOf = new Array(N).fill(-1); md.members.forEach((m, k) => { if (m.kind === 's') { strutOf[m.a] = k; strutOf[m.b] = k; } });
+  const mid = k => { const m = md.members[k]; return [0, 1, 2].map(d => (P[m.a][d] + P[m.b][d]) / 2); };
+  const st = new Array(M).fill(null); // per strut: { start, dur, mode: 'grow' | 'swing', ax, ang }
+  const caps = [];
+  const tiles = S.shown.repeats ? TG.repeatTiles(S.shown.P, md.members) : null;
+  const struts = md.members.map((m, k) => k).filter(k => md.members[k].kind === 's');
+  let end, faceDir = null, holdUntil = 0, breaths = [], flowers = [], ghostAt = null, zoom = null;
+  if (!tiles) { // no icosahedral symmetry: bottom to top
+    struts.sort((a, b) => mid(a)[2] - mid(b)[2]);
+    const dt = Math.max(0.08, Math.min(0.6, 9 / struts.length));
+    struts.forEach((k, i) => st[k] = { start: 0.3 + i * dt, dur: 0.6, mode: 'grow' });
+    end = 0.3 + struts.length * dt + 1.5;
+    caps.push({ t: 0, text: 'Struts go in from the bottom up', sub: 'cables follow once both ends are placed' });
+  } else {
+    const G = TG.icoGroup(), phi = (1 + Math.sqrt(5)) / 2;
+    const axes = []; for (const a of [-1, 1]) for (const b of [-phi, phi]) axes.push([0, a, b], [a, b, 0], [b, 0, a]);
+    const A = axes.map(v => { const l = Math.hypot(...v); return v.map(x => x / l); });
+    const nearestAxis = v => { let bi = 0, bd = -2; A.forEach((a, i) => { const d = a[0] * v[0] + a[1] * v[1] + a[2] * v[2]; if (d > bd) { bd = d; bi = i; } }); return bi; };
+    const unit = struts.filter(k => tiles[k] === 0);
+    const cen = [0, 1, 2].map(d => unit.reduce((s, k) => s + mid(k)[d], 0));
+    const v0 = nearestAxis(cen);
+    const aa = G.map(axisAngle);
+    // c: +72 degrees about v0
+    const c = aa.findIndex(r => Math.abs(r.ang - 2 * Math.PI / 5) < 1e-3 && r.ax[0] * A[v0][0] + r.ax[1] * A[v0][1] + r.ax[2] * A[v0][2] > 0.999);
+    const powers = [0]; for (let i = 1; i < 5; i++) { const Rm = G[powers[i - 1]], Cm = G[c], prod = new Array(9).fill(0); for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) for (let t = 0; t < 3; t++) prod[3 * r + q] += Cm[3 * r + t] * Rm[3 * t + q]; powers.push(G.findIndex(g => g.every((x, j) => Math.abs(x - prod[j]) < 1e-6))); }
+    // where each rotation sends v0, and the most direct rotation for each target axis
+    const target = G.map(g => nearestAxis(TG.matVec(g, A[v0])));
+    const direct = {}; G.forEach((g, i) => { const v = target[i]; if (!(v in direct) || aa[i].ang < aa[direct[v]].ang) direct[v] = i; });
+    const others = Object.keys(direct).map(Number).filter(v => v !== v0)
+      .sort((a, b) => (A[b][0] * A[v0][0] + A[b][1] * A[v0][1] + A[b][2] * A[v0][2]) - (A[a][0] * A[v0][0] + A[a][1] * A[v0][1] + A[a][2] * A[v0][2]));
+    // Every pattern (the flower of 5 copies round one five-fold axis) is built the same way. The first
+    // flower's strokes are worked out once; each other flower gets the same strokes, in the same order,
+    // carried onto its own axis by the rotation that takes v0 there. Starts overlap and quicken.
+    const petal = k => powers.indexOf(tiles[k]);
+    const flower = struts.filter(k => target[tiles[k]] === v0);
+    const around = k => { const m = mid(k), a = A[v0], ref = Math.abs(a[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+      const x = [a[1] * ref[2] - a[2] * ref[1], a[2] * ref[0] - a[0] * ref[2], a[0] * ref[1] - a[1] * ref[0]], y = [a[1] * x[2] - a[2] * x[1], a[2] * x[0] - a[0] * x[2], a[0] * x[1] - a[1] * x[0]];
+      return Math.atan2(m[0] * y[0] + m[1] * y[1] + m[2] * y[2], m[0] * x[0] + m[1] * x[1] + m[2] * x[2]); };
+    // petal by petal round the axis, and inside a petal from the centre outward
+    const inner = k => { const m = mid(k), l = Math.hypot(...m); return Math.acos(Math.max(-1, Math.min(1, (m[0] * A[v0][0] + m[1] * A[v0][1] + m[2] * A[v0][2]) / l))); };
+    flower.sort((a, b) => (petal(a) - petal(b)) || (inner(a) - inner(b)) || (around(a) - around(b)));
+    const gap = Math.max(0.3, Math.min(0.65, 6.5 / flower.length)), flight = 1.3;
+    // each stroke starts at the end nearest what is already drawn, so the pattern grows out of itself
+    const nbr = P.map(() => []); md.members.forEach(m => { if (m.kind !== 's') { nbr[m.a].push(m.b); nbr[m.b].push(m.a); } });
+    const drawn = new Set(), order0 = [];
+    flower.forEach(k => {
+      const m = md.members[k];
+      const score = n => nbr[n].filter(x => drawn.has(x)).length;
+      const axial = n => P[n][0] * A[v0][0] + P[n][1] * A[v0][1] + P[n][2] * A[v0][2];
+      order0.push({ k, from: score(m.a) > score(m.b) ? m.a : score(m.b) > score(m.a) ? m.b : (axial(m.a) >= axial(m.b) ? m.a : m.b) });
+      drawn.add(m.a); drawn.add(m.b);
+    });
+    const span = (flower.length - 1) * gap + flight, closeAfter = span + 1.2, breathDur = 2.2;
+    const axesInOrder = [v0, ...others];
+    const starts = [0.8];
+    starts.push(starts[0] + closeAfter + 0.6); // the second pattern begins as the first one breathes
+    for (let j = 2; j < axesInOrder.length; j++) starts.push(starts[j - 1] + Math.max(1.2, 3.2 * Math.pow(0.82, j - 2)));
+    const d2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+    axesInOrder.forEach((v, j) => {
+      const Hm = j === 0 ? null : G[direct[v]];
+      const mine = j === 0 ? flower : struts.filter(k => target[tiles[k]] === v);
+      order0.forEach((o, i) => {
+        let k = o.k, from = o.from;
+        if (Hm) { // the matching strut and joint in this flower
+          const tm = TG.matVec(Hm, mid(o.k)), tf = TG.matVec(Hm, P[o.from]);
+          k = mine.reduce((best, x) => d2(mid(x), tm) < d2(mid(best), tm) ? x : best, mine[0]);
+          const m = md.members[k]; from = d2(P[m.a], tf) <= d2(P[m.b], tf) ? m.a : m.b;
+        }
+        st[k] = { start: starts[j] + i * gap, dur: flight, mode: 'stroke', from, fl: j };
+      });
+      flowers.push({ start: starts[j], hold: starts[j] + closeAfter, quiet: starts[j] + closeAfter + breathDur });
+    });
+    // anything a flower did not claim (should not happen) is drawn with the last flower
+    struts.forEach(k => { if (!st[k]) st[k] = { start: starts[starts.length - 1] + span, dur: flight, mode: 'stroke', from: md.members[k].a, fl: axesInOrder.length - 1 }; });
+    breaths = flowers.map(f => ({ at: f.hold, dur: breathDur, amount: 0.045 }));
+    const last = starts[starts.length - 1];
+    caps.push({ t: 0, text: 'A line, drawn from a single point', sub: '' });
+    caps.push({ t: 0.8 + gap * 2 + flight, text: 'Threads join them, and take the strain', sub: '' });
+    caps.push({ t: flowers[0].hold - 0.2, text: 'The pattern closes on itself', sub: `${flower.length} struts round a five-fold axis` });
+    caps.push({ t: starts[1] - 0.2, text: 'The same gesture, round the next axis', sub: '' });
+    if (starts.length > 5) caps.push({ t: starts[5], text: 'and again, and again', sub: '' });
+    caps.push({ t: last, text: 'twelve times, into a sphere', sub: `60 copies of one piece, ${struts.length} struts` });
+    end = last + closeAfter + breathDur + 1.5;
+    faceDir = A[v0]; holdUntil = starts[1]; ghostAt = end + 1;
+    // start close on the first pattern, pull back slowly as the others form
+    let fr = 0; flower.forEach(k => { const m = md.members[k]; [m.a, m.b].forEach(i => { const p = P[i], d = p[0] * A[v0][0] + p[1] * A[v0][1] + p[2] * A[v0][2]; fr = Math.max(fr, Math.hypot(p[0] - A[v0][0] * d, p[1] - A[v0][1] * d, p[2] - A[v0][2] * d)); }); });
+    let R = 0; P.forEach(p => R = Math.max(R, Math.hypot(...p)));
+    const fj = []; flower.forEach(k => { const m = md.members[k]; fj.push(P[m.a], P[m.b]); });
+    const focus = [0, 1, 2].map(d => fj.reduce((t, p) => t + p[d], 0) / fj.length);
+    zoom = { amount: Math.max(1, Math.min(4, 0.85 * (fit.target || R) / (fr || R))), out: starts[1] - 0.5, dur: Math.max(4, (starts[Math.min(5, starts.length - 1)] - starts[1]) + 2), focus };
+  }
+  // cables: they unspool once both ends are nearly home, then pull taut
+  const arrive = q => q ? q.start + q.dur * (q.mode === 'stroke' ? 1 : 0.85) : 0;
+  const nodeArrive = P.map((p, i) => arrive(st[strutOf[i]]));
+  const strutLen = struts.length ? struts.reduce((t, k) => { const m = md.members[k]; return t + Math.hypot(P[m.b][0] - P[m.a][0], P[m.b][1] - P[m.a][1], P[m.b][2] - P[m.a][2]); }, 0) / struts.length : 0;
+  const cab = md.members.map((m, k) => {
+    if (m.kind === 's') return null;
+    const slow = true; // every pattern is drawn the same way
+    const L = Math.hypot(P[m.b][0] - P[m.a][0], P[m.b][1] - P[m.a][1], P[m.b][2] - P[m.a][2]), rel = L / (strutLen || L);
+    const offset = slow ? 0.1 + ((k * 0.618034) % 1) * 0.35 : ((k * 0.618034) % 1) * 0.12;
+    return { start: Math.max(nodeArrive[m.a], nodeArrive[m.b]) + offset,
+      reveal: slow ? Math.max(0.6, Math.min(1.8, 0.45 + 1.1 * rel)) : Math.max(0.3, 0.5 * rel), // constant drawing pace
+      settle: slow ? 1.6 : 0.8, rev: nodeArrive[m.b] < nodeArrive[m.a] };
+  });
+  // elastic give: the structure's own soft modes, strongest while the first pattern is loose,
+  // quieter after the breath, and exactly zero once the build ends
+  // every pattern has its own give: loose while it forms, quieter after its breath, zero at the end
+  if (!flowers.length) flowers.push({ start: 0, hold: end * 0.4, quiet: end * 0.5 });
+  const flOf = k => (st[k] && st[k].fl) || 0;
+  const nodeFl = P.map((p, i) => flOf(strutOf[i]));
+  const tugs = flowers.map(() => []);
+  md.members.forEach((m, k) => { if (m.kind !== 's' && nodeFl[m.a] === nodeFl[m.b]) tugs[nodeFl[m.a]].push(cab[k].start + cab[k].reveal); });
+  const give = !reduce.matches ? {
+    flowers, tugs, rise: 1.8,
+  } : null;
+  return { st, cab, strutOf, nodeFl, end, caps, P, face: faceDir, holdUntil, breaths, ghostAt, zoom, give };
+}
+const easeOut = x => x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 4);
+const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+// Elastic give, shared by the build and the finished structure.
+// Each strut sways about its own centre and floats a little, on its own slow rhythm; cables are drawn
+// joint to joint, so they stay connected and stretch. Under that, the structure's soft modes, very lightly.
+const GIVE_REST = 0.55;      // share of the give that carries on once a pattern has closed
+function applyGive(out, t, envNode, envAll, tugNode) {
+  const md = S.model, L = fit.strut || 1, g = ANIM.give;
+  if (!(g > 0)) return out;
+  const moved = new Map();
+  md.members.forEach((m, k) => {
+    if (m.kind !== 's') return;
+    const ga = g * envNode(m.a);
+    if (ga < 1e-4) return;
+    const sway = 0.03 * ga, drift = 0.016 * L * ga;
+    const g1 = (k * 0.618034) % 1, g2 = (k * 0.381966 + 0.3) % 1, g3 = (k * 0.754878 + 0.6) % 1;
+    const f1 = 0.05 + 0.07 * g1, f2 = 0.045 + 0.08 * g2, f3 = 0.04 + 0.07 * g3; // slow: 8 to 25 s a cycle
+    const a = out[m.a], b = out[m.b], c = [0, 1, 2].map(d => (a[d] + b[d]) / 2);
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ul = Math.hypot(...u) || 1, un = u.map(x => x / ul);
+    const cl = Math.hypot(...c) || 1, rn = c.map(x => x / cl);
+    const x2 = [rn[1] * un[2] - rn[2] * un[1], rn[2] * un[0] - rn[0] * un[2], rn[0] * un[1] - rn[1] * un[0]];
+    const s1 = Math.sin(2 * Math.PI * f1 * t + 6.283 * g2), s2 = Math.sin(2 * Math.PI * f2 * t + 6.283 * g3);
+    const ax = [0, 1, 2].map(d => rn[d] * s1 + x2[d] * s2), al = Math.hypot(...ax);
+    const R = al > 1e-6 ? TG.axisRot(ax.map(x => x / al), sway * al) : null;
+    const tr = [0, 1, 2].map(d => drift * (Math.sin(2 * Math.PI * f3 * t + 6.283 * g1) * rn[d] * 0.6 + Math.sin(2 * Math.PI * (f1 + f3) / 2 * t + 6.283 * g3) * x2[d]));
+    for (const n of [m.a, m.b]) { const p = out[n], v = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], w2 = R ? TG.matVec(R, v) : v; moved.set(n, [c[0] + w2[0] + tr[0], c[1] + w2[1] + tr[1], c[2] + w2[2] + tr[2]]); }
+  });
+  const modes = (S.result && S.result.modes) || [], freq = [0.06, 0.09, 0.13], phase = [0, 1.7, 3.9];
+  const w = modes.map((mo, i) => 0.008 * L * g * envAll * Math.sin(2 * Math.PI * freq[i] * t + phase[i]) * (i === 0 ? 1 : 0.7));
+  for (let i = 0; i < out.length; i++) {
+    const tug = tugNode ? tugNode(i) : 0, p = moved.get(i) || out[i], q = [p[0] * (1 + tug), p[1] * (1 + tug), p[2] * (1 + tug)];
+    modes.forEach((mo, j) => { const dv = mo.d[i]; q[0] += w[j] * dv[0]; q[1] += w[j] * dv[1]; q[2] += w[j] * dv[2]; });
+    out[i] = q;
+  }
+  return out;
+}
+let GIVE_T = 0, IDLE_OFF = 1000; // its own clock, so the give keeps moving after a build ends
+function animFrame(t) {
+  const pl = ANIM.plan, md = S.model, P = pl.P, M = md.members.length;
+  // breath: each pattern hangs a little loose until its ring closes, then draws in
+  const looseF = pl.breaths.map(b => 1 + b.amount * (1 - ease((t - b.at) / b.dur)));
+  const out = P.map((p, i) => {
+    const sk = pl.strutOf[i], q = pl.st[sk];
+    if (!q) return p;
+    if (q.mode === 'grow') { const e = ease((t - q.start) / q.dur), m = md.members[sk], c = [0, 1, 2].map(d => (P[m.a][d] + P[m.b][d]) / 2); return [0, 1, 2].map(d => c[d] + (p[d] - c[d]) * e); }
+    if (q.mode === 'stroke') { const l = looseF.length ? looseF[q.fl || 0] : 1; return p.map(v => v * l); }
+    if (q.mode === 'drift') {
+      const e = easeOut((t - q.start) / q.dur), r = 1 - e, m = md.members[sk];
+      const c = [0, 1, 2].map(d => (P[m.a][d] + P[m.b][d]) / 2), cl = Math.hypot(...c), n = c.map(x => x / cl);
+      // unwind a tilt about the strut's own centre
+      let x = TG.matVec(TG.axisRot(n, q.spin * r), [p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
+      // come in from outside, lifting away along the radius
+      const lift = cl * q.lift * r * r;
+      x = [c[0] + x[0] + n[0] * lift, c[1] + x[1] + n[1] * lift, c[2] + x[2] + n[2] * lift];
+      // swirl round the pattern's axis, the way the pattern turns
+      x = TG.matVec(TG.axisRot(q.ax, -q.swirl * r * r), x);
+      return x;
+    }
+    const e = ease((t - q.start) / q.dur);
+    if (e >= 1) return p;
+    return TG.matVec(TG.axisRot(q.ax, q.ang * (e - 1)), p);
+  });
+  const gv = pl.give;
+  if (gv) {
+    // each pattern: fuller give while it forms, then a steady, lighter give that carries on
+    const envOf = f => t < f.hold ? ease((t - f.start) / gv.rise) : 1 - (1 - GIVE_REST) * ease((t - f.hold) / (f.quiet - f.hold));
+    const envF = gv.flowers.map(envOf);
+    // a thread taking the strain draws its pattern in once, smoothly, and lets go: no bounce
+    const tugF = gv.tugs.map(list => { let tug = 0; for (const t0 of list) { const u = t - t0; if (u > 0 && u < 2.4) tug -= 0.0025 * ANIM.give * Math.sin(Math.PI * u / 2.4) ** 2; } return tug; });
+    const tg = t >= pl.end ? pl.end + (GIVE_T - (ANIM.endClock || GIVE_T)) : t;
+    applyGive(out, tg, n => envF[pl.nodeFl[n]] || 0, Math.max(...envF), n => tugF[pl.nodeFl[n]] || 0);
+  }
+  const alpha = new Float32Array(M), glow = new Float32Array(M), curve = new Array(M), stroke = new Array(M), marks = [], cw = new Float32Array(M).fill(1);
+  md.members.forEach((m, k) => {
+    if (m.kind === 's') {
+      const q = pl.st[k];
+      if (q.mode === 'stroke') {
+        const u = (t - q.start) / q.dur, r = ease(u);
+        alpha[k] = t >= q.start ? 1 : 0; glow[k] = 0;
+        if (r < 1 && t >= q.start) stroke[k] = { from: q.from, to: q.from === m.a ? m.b : m.a, r };
+        // a small cross marks the joint the stroke grows from; it appears just before and fades after
+        const mk = clamp01((t - q.start + 0.35) / 0.35) * (1 - clamp01((t - q.start - q.dur - 0.3) / 1.2));
+        if (mk > 0.01) marks.push({ n: q.from, a: mk, big: r < 1 });
+      }
+      else if (q.mode === 'drift') { alpha[k] = ease((t - q.start) / (q.dur * 0.45)); glow[k] = 0; }
+      else { alpha[k] = clamp01((t - q.start) / 0.35); glow[k] = t < q.start ? 0 : 0.45 * (1 - clamp01((t - q.start - q.dur) / 1.2)); }
+      return;
+    }
+    const c = pl.cab[k], u = t - c.start;
+    if (u <= 0) return;
+    // a hairline drawn from the joint that was placed first, faint at first, settling to full strength
+    const r = ease(u / c.reveal), firm = ease((u - c.reveal * 0.6) / c.settle);
+    alpha[k] = 0.35 + 0.6 * firm;
+    cw[k] = 0.7 + 0.3 * firm;
+    if (r < 1) stroke[k] = { from: c.rev ? m.b : m.a, to: c.rev ? m.a : m.b, r, thin: true };
+  });
+  let ghost = 0;
+  if (pl.ghostAt !== undefined && pl.ghostAt !== null) ghost = 0.07 * clamp01((t - pl.ghostAt) / 1.5);
+  return { P: out, alpha, glow, curve, ghost, stroke, marks, cw };
+}
+function animCaption() {
+  const pl = ANIM.plan; let c = pl.caps[0];
+  pl.caps.forEach(x => { if (ANIM.t >= x.t) c = x; });
+  $('aCap').innerHTML = `${esc(c.text)}<small>${esc(c.sub)}</small>`;
+  $('aScrub').value = Math.round(1000 * ANIM.t / pl.end);
+  $('aPlay').textContent = ANIM.playing ? 'Pause' : 'Play';
+}
+function startBuild() {
+  if (!S.result) return;
+  ANIM.plan = makePlan(); ANIM.on = true; ANIM.playing = true; ANIM.t = 0;
+  // turn the camera so the starting five-fold axis faces the viewer
+  const f = ANIM.plan.face;
+  if (f) { const r = Math.hypot(f[0], f[1]); ANIM.viewFrom = { yaw: S.view.yaw, pitch: S.view.pitch }; ANIM.viewTo = { yaw: Math.atan2(-f[0], -f[1]), pitch: Math.atan2(f[2], r) }; ANIM.viewT = 0; }
+  else ANIM.viewTo = null;
+  $('anim').hidden = false; $('legend').hidden = true; $('bBuild').setAttribute('aria-pressed', 'true');
+  S.sel = -1; hover = -1; renderSel(); animCaption();
+}
+function stopBuild() {
+  // carry on from the build's own give clock, so closing a finished build does not jump
+  if (ANIM.plan && ANIM.t >= ANIM.plan.end && ANIM.endClock !== undefined) IDLE_OFF = ANIM.plan.end - ANIM.endClock;
+  ANIM.on = false; ANIM.playing = false; ANIM.plan = null;
+  $('anim').hidden = true; $('legend').hidden = false; $('bBuild').setAttribute('aria-pressed', 'false');
+}
+$('bBuild').onclick = () => ANIM.on ? stopBuild() : startBuild();
+$('aClose').onclick = stopBuild;
+// speed slider: logarithmic, 0.25x to 8x, with 1x at 40% of the track
+const SPEED_MIN = 0.25, SPEED_MAX = 8;
+const sliderToSpeed = x => SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, x / 1000);
+const speedToSlider = v => 1000 * Math.log(v / SPEED_MIN) / Math.log(SPEED_MAX / SPEED_MIN);
+function setSpeed(v, fromSlider) {
+  // snap near round values so 1x, 2x, 4x are easy to hit
+  for (const r of [0.25, 0.5, 1, 2, 3, 4, 6, 8]) if (Math.abs(Math.log(v / r)) < 0.06) v = r;
+  ANIM.speed = v; store.set('tw.speed', String(v));
+  $('aSpeedVal').textContent = (v < 1 ? v.toFixed(2).replace(/0$/, '') : v % 1 ? v.toFixed(1) : String(v)) + '\u00d7';
+  if (!fromSlider) $('aSpeed').value = Math.round(speedToSlider(v));
+}
+$('aSpeed').addEventListener('input', e => setSpeed(sliderToSpeed(+e.target.value), true));
+function setGive(v) { ANIM.give = v; store.set('tw.give2', String(v)); const txt = v.toFixed(1).replace(/\.0$/, '') + '\u00d7'; $('aGive').value = $('give2').value = Math.round(v * 100); $('aGiveVal').textContent = $('gvVal2').textContent = txt; }
+$('give2').addEventListener('input', e => setGive(+e.target.value / 100));
+$('aGive').addEventListener('input', e => setGive(+e.target.value / 100));
+setGive(ANIM.give);
+setSpeed(ANIM.speed);
+$('aPlay').onclick = () => {
+  if (!ANIM.plan) return;
+  if (ANIM.t >= ANIM.plan.end) { // finished: play again from the first stroke, turning back to the pattern
+    ANIM.t = 0; ANIM.playing = true;
+    if (ANIM.plan.face) { ANIM.viewFrom = { yaw: S.view.yaw, pitch: S.view.pitch }; ANIM.viewT = 0; }
+  } else ANIM.playing = !ANIM.playing;
+  animCaption();
+};
+$('aScrub').addEventListener('input', e => { if (!ANIM.plan) return; ANIM.playing = false; ANIM.t = ANIM.plan.end * e.target.value / 1000; animCaption(); });
+
+if (location.hash === '#noworker') window.__twDraw = () => { if (ANIM.plan) animCaption(); draw(); }; // test hook
+// ---------- panels ----------
+function setDetails(open) {
+  $('report').hidden = !open; $('bDetails').textContent = open ? 'Hide details' : 'Show details'; $('bDetails').setAttribute('aria-expanded', String(open));
+  $('rbSum').textContent = open ? '' : $('verdict').textContent;
+  store.set('tw.details', open ? '1' : '0');
+}
+function setFull(on) {
+  $('bFull').setAttribute('aria-pressed', String(on)); $('bFull').textContent = on ? 'Exit full view' : 'Full view';
+  document.querySelector('.app').classList.toggle('full', on);
+  if (on) setDetails(false); else setDetails(store.get('tw.detailsBeforeFull') !== '0');
+  store.set('tw.full', on ? '1' : '0');
+}
+$('bDetails').onclick = () => setDetails($('report').hidden);
+$('bFull').onclick = () => { const on = $('bFull').getAttribute('aria-pressed') !== 'true'; if (on) store.set('tw.detailsBeforeFull', $('report').hidden ? '0' : '1'); setFull(on); };
+if (store.get('tw.full') === '1') setFull(true); else setDetails(store.get('tw.details') !== '0');
+
+// ---------- display ----------
+function setShade(v) { S.shade = v; $('shade').value = Math.round(v * 100); $('shVal').textContent = Math.round(v * 100) + '%'; store.set('tw.shade', String(v)); }
+function setCable(v) { S.cable = v; $('cable').value = Math.round(v * 100); $('cbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.cable', String(v)); }
+$('shade').addEventListener('input', e => setShade(+e.target.value / 100));
+$('cable').addEventListener('input', e => setCable(+e.target.value / 100));
+$('bDisplay').onclick = () => { const open = $('dpanel').hidden; $('dpanel').hidden = !open; $('bDisplay').setAttribute('aria-pressed', String(open)); $('bDisplay').setAttribute('aria-expanded', String(open)); };
+{ const a = parseFloat(store.get('tw.shade')), b = parseFloat(store.get('tw.cable')); setShade(a >= 0 && a <= 1.5 ? a : 1); setCable(b >= 0.2 && b <= 2 ? b : 1); }
+
+let last = performance.now();
+function frame(t) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  const holding = ANIM.on && ANIM.plan && ANIM.t < ANIM.plan.holdUntil;
+  if (ANIM.on && ANIM.viewTo && ANIM.viewT < 1 && !drag) {
+    ANIM.viewT = Math.min(1, ANIM.viewT + dt * ANIM.speed / 0.9);
+    const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
+    let dy = ((b.yaw - a.yaw) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
+    S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
+  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 0.18);
+  fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
+  GIVE_T += dt;
+  if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } animCaption(); }
+  try { draw(); } catch (e) { /* skip this frame */ }
+}
+requestAnimationFrame(frame);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+
+// ---------- controls ----------
+function setFamily(f, n) {
+  S.family = f; if (n) S.n = n;
+  $('family').value = f; $('n').value = S.n; $('k').value = S.k;
+  $('nwrap').hidden = f !== 'prism' && f !== 'tower'; $('kwrap').hidden = f !== 'tower';
+  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('bScale').hidden = f !== 'sphere';
+  build(); renderGroups(); solveSoon(0);
+  store.set('tw.family', f); store.set('tw.n', String(S.n)); store.set('tw.k', String(S.k)); store.set('tw.size', String(S.f)); store.set('tw.pat', S.pat);
+}
+$('family').addEventListener('change', e => setFamily(e.target.value));
+$('n').addEventListener('change', e => { const v = Math.max(3, Math.min(12, parseInt(e.target.value) || 3)); setFamily(S.family, v); });
+// repeats: Goldberg-Coxeter sizes, each one a finer repeat of the same icosahedral pattern
+$('f').innerHTML = TG.SPHERE_SIZES.map(([m, n], i) => { const T = m * m + m * n + n * n; return `<option value="${i}">${i + 1} · ${30 * T} struts</option>`; }).join('');
+$('f').addEventListener('change', e => { S.f = Math.max(0, Math.min(TG.SPHERE_SIZES.length - 1, parseInt(e.target.value) || 0)); keepLengths(() => setFamily('sphere')); });
+$('pat').addEventListener('change', e => { S.pat = e.target.value; setFamily('sphere'); });
+// changing the repeat count keeps the cable lengths you set, so the same web just grows
+function keepLengths(fn) { const g = S.struct && S.struct.groups; fn(); if (g && S.struct.groups.ring && g.ring) { for (const k of ['ring', 'cross', 'strut']) Object.assign(S.struct.groups[k], { len: g[k].len, ratio: g[k].ratio }); renderGroups(); solveSoon(0); } }
+$('k').addEventListener('change', e => { S.k = Math.max(2, Math.min(10, parseInt(e.target.value) || 4)); setFamily('tower'); });
+function setChir(c) { S.chir = c; $('chirR').setAttribute('aria-pressed', c > 0); $('chirL').setAttribute('aria-pressed', c < 0); const keep = { g: JSON.stringify(S.struct.groups), o: S.over }; build(); S.struct.groups = JSON.parse(keep.g); S.over = keep.o; renderGroups(); solveSoon(0); }
+$('chirR').onclick = () => setChir(1); $('chirL').onclick = () => setChir(-1);
+$('units').addEventListener('input', e => { S.units = e.target.value.slice(0, 8) || 'cm'; renderGroups(); if (S.result) { renderReport(); renderSel(); } });
+$('dia').addEventListener('input', e => { const v = parseFloat(e.target.value); if (v >= 0) { S.dia = v; if (S.result) renderReport(); } });
+
+$('pDiss').onclick = () => {
+  setFamily('prism', 3);
+  ['bot', 'top', 'side'].forEach(g => S.struct.groups[g].len = 20.44);
+  const st = S.struct.members.map((m, i) => m.kind === 's' ? i : -1).filter(i => i >= 0);
+  S.over[st[0]] = { mode: 'fixed', len: 26 }; S.over[st[1]] = { mode: 'fixed', len: 26 };
+  S.sel = st[2]; renderGroups(); solveSoon(0);
+};
+function tetraPreset(b, c) { setFamily('tetra'); S.struct.groups.ring.len = b; S.struct.groups.cross.len = c; renderGroups(); solveSoon(0); }
+$('pTetra').onclick = () => tetraPreset(20, 20);
+$('pTetraC').onclick = () => tetraPreset(20, 30);
+
+// benchmarks
+runJob({ bench: true }, data => {
+  const rows = data.bench || [];
+  $('bench').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r[0])}</td><td class="n">${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join('')
+    + `<tr><td colspan="3" class="hint" style="font-family:var(--body)">* Pars' closed form, maximised numerically over φ. Dissimilar value from his worked example (cm).</td></tr>` : '<tr><td colspan="3">Benchmarks need Web Workers.</td></tr>';
+});
+
+// start on the Pars dissimilar example so the first view shows the method
+const f0 = store.get('tw.family');
+S.n = Math.max(3, Math.min(12, parseInt(store.get('tw.n')) || 3)); { const z = parseInt(store.get('tw.size')); S.f = z >= 0 && z < TG.SPHERE_SIZES.length ? z : 2; } S.pat = store.get('tw.pat') === 'gold' ? 'gold' : 'geo'; S.k = Math.max(2, Math.min(10, parseInt(store.get('tw.k')) || 4));
+if (!f0 || f0 === 'sphere') setFamily('sphere'); else if (f0 !== 'prism') setFamily(f0); else $('pDiss').onclick();
+})();
+</script>

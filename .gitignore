@@ -1,0 +1,7 @@
+tests/out/
+node_modules/
+.DS_Store
+# third-party material: kept locally for reference, not redistributed
+reference/Snelson_Tensegrity_and_Weaving.pdf
+reference/sphere_photo.webp
+.claude/

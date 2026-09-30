@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tensegrity sphere</title>
+<style>
+:root{--bg:#000;--ui:rgba(255,255,255,.65);box-sizing:border-box;
+padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ui);font:14px/1.4 system-ui,sans-serif;color-scheme:dark}
+body{display:flex;flex-direction:column}
+canvas{flex:1;width:100%;min-height:0;display:block;touch-action:none;cursor:grab}
+.bar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:center;padding:12px 16px}
+button{background:none;border:1px solid var(--ui);color:var(--ui);padding:6px 14px;border-radius:999px;font:inherit;cursor:pointer}
+button:hover,button:focus-visible{background:#fff;color:#000;outline:none}
+label{display:flex;gap:8px;align-items:center}
+input[type=range]{accent-color:#fff;width:110px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="bar">
+  <button id="replay">Replay</button>
+  <button id="spin">Spin: on</button>
+  <label>Density <input id="freq" type="range" min="1" max="5" step="1" value="4"></label>
+  <label>Build time <input id="time" type="range" min="6" max="40" step="1" value="16"></label>
+</div>
+<script>
+// One spherical tensegrity shell per density, solved offline.
+// Nodes: a geodesic sphere (10f^2+2 points, f = 4..8). Every node carries one strut end.
+// Struts: chords about 3.2 edge lengths long, each leaning the same way off a mesh line
+// (a consistent twist). Cables: the geodesic edges. Node radii are solved so crossing
+// struts sit in separate layers.
+const DATA=__DATA__;
+
+let TOTAL=16000,layers=[];
+function build(f){
+  const D=DATA[f],N=D.P.length;
+  const order=D.P.map((p,i)=>i).sort((a,b)=>(D.P[b][1]-D.P[a][1])||(Math.atan2(D.P[a][2],D.P[a][0])-Math.atan2(D.P[b][2],D.P[b][0])));
+  const rank=new Array(N);order.forEach((n,r)=>rank[n]=r);
+  return {P:D.P,S:D.S,C:D.C,rank,N,life:0,target:1};
+}
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),$=id=>document.getElementById(id);
+let rotY=0.4,rotX=0.4,spin=true,drag=null,t0=performance.now(),camC=[0,0],camS=100;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function fit(){const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);}
+addEventListener('resize',fit);fit();
+const easeOut=k=>{k=Math.max(0,Math.min(1,k));return 1-Math.pow(1-k,3);};
+const smooth=k=>{k=Math.max(0,Math.min(1,k));return k*k*(3-2*k);};
+function start(){
+  TOTAL=+$('time').value*1000;
+  layers=[build(+$('freq').value)];layers[0].life=1;
+  t0=performance.now()-(reduce?TOTAL*2:0);
+  camC=[0,0];camS=Math.min(cv.clientWidth,cv.clientHeight)*1.6;
+}
+// Density change keeps progress; old shell fades while the new one grows in.
+function setDensity(){layers.forEach(l=>l.target=0);layers.push(build(+$('freq').value));}
+function setTime(){const n=performance.now(),fr=(n-t0)/TOTAL;TOTAL=+$('time').value*1000;t0=n-fr*TOTAL;}
+function project(p){
+  const cy=Math.cos(rotY),sy=Math.sin(rotY),cx=Math.cos(rotX),sx=Math.sin(rotX);
+  const x=p[0]*cy+p[2]*sy,z=-p[0]*sy+p[2]*cy;
+  return [x,p[1]*cx-z*sx,p[1]*sx+z*cx];
+}
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(50,now-last);last=now;
+  const w=cv.clientWidth,h=cv.clientHeight,el=now-t0;
+  const GROW=2400,span=Math.max(1,TOTAL-GROW);
+  for(const l of layers){const d=dt/1400;l.life=l.target>l.life?Math.min(l.target,l.life+d):Math.max(l.target,l.life-d);}
+  layers=layers.filter(l=>l.target>0||l.life>0);
+  let sx=0,sy=0,sw=0,r=0.25;
+  const drawn=layers.map(L=>{
+    const life=smooth(L.life);
+    const g=new Float32Array(L.N),Q=new Array(L.N);
+    for(let i=0;i<L.N;i++){
+      g[i]=easeOut((el-span*Math.pow(L.rank[i]/Math.max(1,L.N-1),0.9))/GROW)*life;
+      const p=L.P[i];Q[i]=project([p[0]*g[i],p[1]*g[i],p[2]*g[i]]);
+      if(g[i]>0.02){sx+=Q[i][0]*g[i];sy+=Q[i][1]*g[i];sw+=g[i];}
+    }
+    return {L,g,Q};
+  });
+  if(sw>0){sx/=sw;sy/=sw;}
+  for(const {Q,g} of drawn)for(let i=0;i<Q.length;i++)if(g[i]>0.02)r=Math.max(r,Math.hypot(Q[i][0]-sx,Q[i][1]-sy));
+  const targetS=Math.min(w,h)*0.46/(r*1.04);
+  const k=1-Math.pow(0.02,dt/1000);
+  camC[0]+=(sx-camC[0])*k;camC[1]+=(sy-camC[1])*k;camS+=(targetS-camS)*k;
+  const S=camS,X=w/2,Y=h/2;
+  ctx.clearRect(0,0,w,h);
+  const segs=[];
+  for(const {L,g,Q} of drawn){
+    for(const [a,b] of L.C)segs.push({a:Q[a],b:Q[b],s:0,g:Math.min(g[a],g[b])});
+    for(const [a,b] of L.S)segs.push({a:Q[a],b:Q[b],s:1,g:Math.min(g[a],g[b])});
+  }
+  for(const s of segs)s.z=(s.a[2]+s.b[2])/2;
+  segs.sort((p,q)=>p.z-q.z);
+  ctx.lineCap='round';ctx.strokeStyle='#fff';
+  const wS=Math.max(1,Math.min(3.6,S*0.0075)),wC=Math.max(0.4,Math.min(0.9,S*0.0016));
+  for(const s of segs){
+    const a=Math.min(1,Math.max(0,(s.g-0.3)*1.6));
+    if(a<=0)continue;
+    const depth=Math.max(0,Math.min(1,(s.z+1.15)/2.3));
+    ctx.globalAlpha=(0.22+0.78*depth)*a*(s.s?1:0.5);
+    ctx.lineWidth=s.s?wS:wC;
+    ctx.beginPath();
+    ctx.moveTo(X+(s.a[0]-camC[0])*S,Y-(s.a[1]-camC[1])*S);
+    ctx.lineTo(X+(s.b[0]-camC[0])*S,Y-(s.b[1]-camC[1])*S);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  if(spin&&!drag)rotY+=dt*0.00018;
+  requestAnimationFrame(frame);
+}
+start();requestAnimationFrame(frame);
+$('replay').onclick=start;
+$('freq').oninput=setDensity;$('time').oninput=setTime;
+$('spin').onclick=()=>{spin=!spin;$('spin').textContent='Spin: '+(spin?'on':'off');};
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+cv.addEventListener('pointermove',e=>{if(!drag)return;rotY+=(e.clientX-drag.x)*0.008;rotX+=(e.clientY-drag.y)*0.008;drag={x:e.clientX,y:e.clientY};});
+cv.addEventListener('pointerup',()=>{drag=null;cv.style.cursor='grab';});
+</script>
+</body>
+</html>
