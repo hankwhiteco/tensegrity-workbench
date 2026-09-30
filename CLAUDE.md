@@ -48,6 +48,9 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - tests/ui_smoke.py: headless Chrome run of the page with `#noworker` (virtual time does not run Workers).
 - reference/: Snelson PDF, and the old animated-globe project.
 - Published artifact: https://claude.ai/artifact/FhSaeKeedso497N2HPApPy (republish dist/index.html to that URL).
+- Public site: https://hankwhiteco.github.io/tensegrity-workbench/ (GitHub Pages, serves docs/ on main).
+  Repo: https://github.com/hankwhiteco/tensegrity-workbench (public). To update: `python3 tools/build.py`, commit, `git push`.
+  The Snelson PDF and the reference photo are git-ignored (third-party copyright). Keep it that way.
 
 ## UI rules
 - Lower panel collapses with the Hide/Show details strip; the strip keeps the verdict visible when collapsed. The Full view toolbar button also hides the side panel. Both are remembered in localStorage.
