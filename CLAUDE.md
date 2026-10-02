@@ -78,7 +78,7 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - Controls: one Play/Pause key; after the build ends it shows Play and restarts from the start.
 
 ## Export
-- PNG still (1024 to 4096), and GIF (20 fps) or MP4 (30 fps, H.264 via WebCodecs) clips at 720, 1080 or 1600 px. Same scheme as the Dymaxion studio. gifenc and mp4-muxer load from jsDelivr on first use.
+- PNG still (1024 to 4096), and GIF or MP4 (30 fps, H.264 via WebCodecs) clips at 720, 1080 or 1600 px. Same scheme as the Dymaxion studio. GIF frame rate is a choice of 10, 12.5, 16.7, 20 (default), 25, 33 or 50 fps: GIF delays are whole hundredths of a second, so only these are exact (`S.gifCs`, remembered). Frames are generated at that exact rate, so clip length is right. gifenc and mp4-muxer load from jsDelivr on first use.
 - Frames are square, drawn off screen by the same `draw(canvas, ctx, opts)` as the view, with line scale `size / 700` so they read like a 700 px view. No selection or hover in exports.
 - Seamless turn: one 360 degree yaw turn over 4 to 40 s (Turn length). The resting give is not periodic, so each frame blends the pose at t with the pose at t - T by u = i/n; the frame after the last is exactly frame 0. Measured: the last-to-first frame step equals an ordinary frame step.
 - Build: runs `beginBuild()` and steps the same clocks as the live view (`step(dt)`), at the build speed, plus 1.5 s of the finished structure. The live loop holds still while `exporting` is set; every clock, the camera and the build state are saved and restored afterwards. A solve that lands mid-export cancels it.

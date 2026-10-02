@@ -431,6 +431,13 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <label for="turnSecs">Turn length</label><span class="val" id="turnVal"></span>
         <input type="range" id="turnSecs" min="4" max="40" step="1" value="12">
       </div>
+      <div class="row">
+        <label for="gifRate">GIF frame rate</label>
+        <select id="gifRate" style="width:auto">
+          <option value="10">10 fps</option><option value="8">12.5 fps</option><option value="6">16.7 fps</option>
+          <option value="5" selected>20 fps</option><option value="4">25 fps</option><option value="3">33 fps</option><option value="2">50 fps</option>
+        </select>
+      </div>
       <label class="check"><input type="checkbox" id="exportBg" checked><span>Include artboard background</span><small>off = transparent PNG and GIF</small></label>
       <div class="exports three">
         <button class="btn primary" id="exGif">GIF</button>
@@ -527,7 +534,7 @@ const S = {
   struct: null, over: {}, sel: -1,
   result: null, verify: null, model: null,
   view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
-  bg: 'ink', clip: 'turn', turnSecs: 12, exportBg: true,
+  bg: 'ink', clip: 'turn', turnSecs: 12, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
 
@@ -929,7 +936,8 @@ legend();
 // four times (a flower of 5), and the flower is swung out to the other 11 five-fold axes: 60 copies.
 const ANIM = { on: false, playing: false, t: 0, plan: null, autoDone: false, speed: 1, give: 1 };
 let exporting = null, buildEnd = null; // the running GIF/MP4 job (the view holds still meanwhile); the build's length, cached
-const GIF_FPS = 20, MP4_FPS = 30;
+const MP4_FPS = 30;
+const gifFps = () => 100 / S.gifCs; // GIF delays are whole hundredths of a second: S.gifCs per frame
 { const v = parseFloat(store.get('tw.give2')); if (v >= 0 && v <= 3) ANIM.give = v; }
 { const v = parseFloat(store.get('tw.speed')); if (v >= 0.25 && v <= 8) ANIM.speed = v; }
 const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
@@ -1276,7 +1284,8 @@ function syncClip() {
   $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360° · ${p.T} s` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
   $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
   $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
-  $('exPng').disabled = $('motionSize').disabled = busy;
+  $('gifRate').value = String(S.gifCs);
+  $('exPng').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
 }
 document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener('change', () => { S.clip = r.value; store.set('tw.clip', S.clip); syncClip(); }));
 $('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });
@@ -1284,6 +1293,8 @@ $('exportBg').addEventListener('change', e => { S.exportBg = e.target.checked; s
 { const t = parseInt(store.get('tw.turn')); if (t >= 4 && t <= 40) S.turnSecs = t; }
 S.clip = store.get('tw.clip') === 'build' ? 'build' : 'turn';
 S.exportBg = store.get('tw.exportBg') !== '0';
+$('gifRate').addEventListener('change', e => { S.gifCs = +e.target.value; store.set('tw.gifCs', String(S.gifCs)); });
+{ const g = parseInt(store.get('tw.gifCs')); if ([2, 3, 4, 5, 6, 8, 10].includes(g)) S.gifCs = g; }
 
 const libs = {};
 const loadGif = () => libs.gif ||= import('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js')
@@ -1330,7 +1341,7 @@ async function runExport(kind) {
   if (kind === 'mp4' && typeof VideoEncoder === 'undefined') {
     toast('MP4 export needs a browser with video encoding: Chrome, Edge or Safari 16.4 and later.'); return;
   }
-  const fps = kind === 'gif' ? GIF_FPS : MP4_FPS, plan = clipPlan(S.clip, fps);
+  const fps = kind === 'gif' ? gifFps() : MP4_FPS, plan = clipPlan(S.clip, fps);
   if (!plan) return;
   const size = +$('motionSize').value;
   // everything a clip moves, so the view comes back exactly as it was
@@ -1372,7 +1383,7 @@ async function runExport(kind) {
 
 async function encodeGif(lib, plan, c, cx, frame, fps) {
   const { GIFEncoder, quantize, applyPalette } = lib;
-  const W = c.width, H = c.height, npx = W * H, delay = Math.round(1000 / fps);
+  const W = c.width, H = c.height, npx = W * H, delay = S.gifCs * 10;
   const fill = exportFill(), transparent = !fill, matte = fill || solidBg(), mrgb = hexRgb(matte);
   const gif = GIFEncoder(), alpha = new Uint8Array(npx);
   for (let i = 0; i < plan.n; i++) {
