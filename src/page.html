@@ -373,7 +373,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       <div class="layers">
         <label class="layer"><input type="checkbox" id="bSpin" checked>
           <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
-          <span class="meta"><span class="name">Rotate</span><span class="count">slow turn about the vertical</span></span><span class="sw"></span></label>
+          <span class="meta"><span class="name">Rotate</span><span class="count" id="spinNote">one turn about the vertical</span></span><span class="sw"></span></label>
         <label class="layer" data-accent><input type="checkbox" id="bForce">
           <svg viewBox="0 0 34 22"><path d="M4 18 L30 4" stroke-width="3"/><path d="M4 4 L30 18" stroke-width="1"/></svg>
           <span class="meta"><span class="name">Forces</span><span class="count">width shows each member's load</span></span><span class="sw"></span></label>
@@ -429,7 +429,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       </div>
       <div class="row" id="turnRow">
         <label for="turnSecs">Turn length</label><span class="val" id="turnVal"></span>
-        <input type="range" id="turnSecs" min="4" max="40" step="1" value="12">
+        <input type="range" id="turnSecs" min="4" max="40" step="1" value="35">
       </div>
       <div class="row">
         <label for="gifRate">GIF frame rate</label>
@@ -534,7 +534,7 @@ const S = {
   struct: null, over: {}, sel: -1,
   result: null, verify: null, model: null,
   view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
-  bg: 'ink', clip: 'turn', turnSecs: 12, exportBg: true, gifCs: 5,
+  bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
 
@@ -1277,8 +1277,8 @@ function syncClip() {
   if (!$('clipInfo')) return;
   const busy = !!exporting;
   document.querySelector(`input[name="clip"][value="${S.clip}"]`).checked = true;
-  $('turnRow').hidden = S.clip !== 'turn';
-  $('turnSecs').value = S.turnSecs; $('turnVal').textContent = `${S.turnSecs} s`;
+  $('turnSecs').value = S.turnSecs; $('turnVal').textContent = `${S.turnSecs} s per turn`;
+  $('spinNote').textContent = `one turn every ${S.turnSecs} s, as exported`;
   $('exportBg').checked = S.exportBg;
   const p = clipPlan(S.clip, MP4_FPS);
   $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360° · ${p.T} s` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
@@ -1482,7 +1482,7 @@ function step(dt, ui) {
     const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
     let dy = ((b.yaw - a.yaw) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
     S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
-  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 0.18);
+  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
   GIVE_T += dt;
   if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }
