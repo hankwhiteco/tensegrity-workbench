@@ -766,7 +766,8 @@ function fitView() {
 function resize() { const d = window.devicePixelRatio || 1, b = cv.getBoundingClientRect(); cv.width = Math.round(b.width * d); cv.height = Math.round(b.height * d); }
 new ResizeObserver(resize).observe(cv); resize();
 
-function animZoom() { const zp = !STILL && ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
+// the build's close-up and pull-back; off with fixed scale, so the build plays at the one fixed scale
+function animZoom() { const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
 // the canvas being drawn: the viewport, or an export frame; STILL: draw without the build's camera
 let PW = 1, PH = 1, STILL = false;
 function project(p) {
@@ -781,7 +782,7 @@ function project(p) {
   const W = PW, H = PH, s = Math.min(W, H) * 0.40 / fit.r * zoom * zb;
   const dist = fit.r * 4.2, persp = dist / (dist + Y2);
   let ox = 0, oy = 0;
-  const zp = !STILL && ANIM.on && ANIM.plan && ANIM.plan.zoom;
+  const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom;
   if (zp && zp.focus && zp.amount > 1 && !project.inner) { // aim at the first pattern while close in
     project.inner = true; const f = project(zp.focus); project.inner = false;
     const w = (zb - 1) / (zp.amount - 1); ox = w * (f[0] - W / 2); oy = w * (f[1] - H / 2);

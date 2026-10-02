@@ -84,7 +84,7 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - Build: runs `beginBuild()` and steps the same clocks as the live view (`step(dt)`), at the build speed, plus 1.5 s of the finished structure. The live loop holds still while `exporting` is set; every clock, the camera and the build state are saved and restored afterwards. A solve that lands mid-export cancels it.
 - Backgrounds: with "Include artboard background" off, PNG and GIF are transparent (GIF soft edges blended toward the artboard colour). MP4 always has one: the artboard, or for Clear, Ink or Paper, whichever suits the strut colour.
 - Saving uses `window.claude.use('downloads')` when the page runs as an artifact, otherwise a download link. The artifact needs the downloads capability for this.
-- The camera starts close on the pattern and aimed at it (`zoom.focus`), with a slow drift, then pulls back as the pattern repeats. No ghost for spheres now; the camera pulls back slowly while flowers 2 to 6 form.
+- The camera starts close on the pattern and aimed at it (`zoom.focus`), with a slow drift, then pulls back as the pattern repeats. No ghost for spheres now; the camera pulls back slowly while flowers 2 to 6 form. With Fixed scale on there is no close-up or pull-back: the build plays at the fixed scale (the camera still turns to face the first pattern). Checked live in `animZoom()` and `project()`, so the switch takes effect mid-build.
 - Inspiration the user shared (stills): hairlines drawn out from points, small + and x markers, radial bursts, trails, tiny mono labels.
 - Tone: calm and quiet. No orange glow on the first pattern; captions are short lines, not numbers.
 - Structures without the symmetry (prisms, towers) build bottom to top.
