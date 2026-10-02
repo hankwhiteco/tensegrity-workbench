@@ -6,6 +6,8 @@ A browser tool for designing tensegrity structures that are mathematically sound
 - Every result is checked independently: equilibrium at every joint, cables in tension, struts in compression, prestress stability, super stability, and strut clearance.
 - Repeating-pattern spheres from 30 to 750 struts, solved one repeat unit at a time using icosahedral symmetry.
 - A build animation that draws the first pattern stroke by stroke and repeats it round the sphere.
+- Export a PNG still, or a GIF or MP4 clip: a seamless full turn, or the build animation from start to finish.
+- Same control-face design as the [Dymaxion Sphere Studio](https://github.com/hankwhiteco/dymaxion-sphere-studio), with an Ink, Paper or Clear artboard.
 
 Live page: `docs/index.html` (served by GitHub Pages).
 

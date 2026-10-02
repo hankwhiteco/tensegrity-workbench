@@ -31,6 +31,7 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - Expanded octahedron with 6 struts.
 - Spheres (main focus): `ringSphere` on a Goldberg polyhedron ("triangle joints", every strut end sits in a cable triangle) or on a class I geodesic sphere ("ring joints"). Both have 60 f^2 joints and 30 f^2 struts (geo rings have 5 or 6 cables). All struts come out equal length. Joint types = f^2: forces are identical within a type, not across types.
   - Sizes: Goldberg-Coxeter GP(m,n) (`geodesicMN`, `goldbergMN`, list in `SPHERE_SIZES`): 30, 90, 120, 210, 270, 360, 390, 480, 570, 630, 750 struts. The Repeats control steps through these.
+  - Fixed scale (View switch, spheres only): every size is framed as the largest (750 struts) would be, so all sizes share one scale. It used to hold the 270-strut scale only, so from 360 up each size filled the frame again.
   - Reference: reference/sphere_photo.webp. Closest match is ring joints, 120 struts (GP 2,0), twist 1, b = c. That is the page default. Measured strut / diameter 0.33, photo reads about 0.37 to 0.42 (camera close, so the front struts look long). tests/photo_compare.js renders candidates beside the photo.
   - Twist 2 (`ringSphere(..., twist)`) gives longer struts but lumpy, crowded spheres. Rejected by eye.
   - Ring joints are valid up to 270 struts; from 360 on, struts collide (clearance 0). Triangle joints are valid up to 750.
@@ -53,12 +54,15 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
   The Snelson PDF and the reference photo are git-ignored (third-party copyright). Keep it that way.
 
 ## UI rules
-- Lower panel collapses with the Hide/Show details strip; the strip keeps the verdict visible when collapsed. The Full view toolbar button also hides the side panel. Both are remembered in localStorage.
+- Design matches the Dymaxion Sphere Studio (github.com/hankwhiteco/dymaxion-sphere-studio, studio.html): Braun-style control face after Dieter Rams. Dark housing, control panel on the right, Helvetica Neue, Braun orange accent, lowercase section labels, thin sliders with rectangular caps, push buttons with indicator lamps (`.seg`), slide switches (`.layer`), round transport keys (`.key`), the grille ornament by the title. Keep the two tools looking like one family. The workbench is always dark (the studio's dark-mode palette), whatever the system setting.
+- The structure sits on a rounded artboard (`#board`): Ink (white rods on black like the studio photos), Paper or Clear. Viewport colours are CSS variables on `.board[data-bg]`; `readColors()` reads them from the board. The page always lands on Ink (the choice is not remembered). The compression colour in the Forces view is #7A711E on every artboard; selection, hover and tension stay orange.
+- Panel sections: structure, member lengths, selected member, view (Rotate, Forces, Node ids, Fixed scale switches; artboard; depth shading, cable brightness, give), build, export, Pars presets, build check. Reset view and Full view sit in the masthead.
+- Lower panel collapses with the Hide/Show details strip; the strip keeps the verdict visible when collapsed. Full view also hides the side panel. Both are remembered in localStorage.
 - Model, structure and result are swapped in together, only when a solve succeeds. Earlier this was not the case: the draw loop indexed the old shape's nodes and died, and the shape vanished.
 - The draw loop must never stop on a bad frame.
 
 ## Build animation
-- Build button (plays once by itself on the first sphere load). Play/pause (restarts once finished), scrubber, Give slider, speed slider 0.25x to 8x, logarithmic, snaps to round values (remembered in localStorage), captions.
+- Watch it build button in the panel's build section (plays once by itself on the first sphere load). On the artboard: a compact bar with the caption, a round Play/Pause key (restarts once finished), the scrubber and a close button. Speed slider (panel) 0.25x to 8x, logarithmic, snaps to round values (remembered in localStorage).
 - Sequence for icosahedral structures (`repeatTiles` splits members into 60 copies of one repeat unit):
   1. The first pattern is the flower of 5 round the five-fold axis nearest the unit. Each strut is drawn as a stroke (1.3 s, ease in-out) from one joint to the other, with a bright point at the tip. A small faint ellipse (a circle lying flat on the sphere, radius 2.2% of strut length) marks the starting joint just before and fades after. Crosses were too dominant. Each stroke starts at the end with the most already-drawn neighbours, so the pattern grows out of itself. (An earlier version flew struts in from outside; the user preferred strokes. `drift` mode is still in the code.)
   2. Cables are straight hairlines stroked from the joint that was placed first, once both ends are home. Pace is constant (duration grows with length). Golden-ratio offsets spread the starts. Each starts faint (alpha 0.35, thinner) and settles to full strength as it takes up tension. (Slack curved threads were tried and dropped: the bend was invented and clashed with the straight-line style.)
@@ -69,9 +73,17 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
   - Under that, the 3 softest symmetric modes, very lightly (0.8% of strut length).
   - A settling cable draws its pattern in once, smoothly (sin^2 bump over 2.4 s). No damped oscillation: the earlier version was too bouncy.
   - Fuller while a pattern forms, then it carries on at 55% (`GIVE_REST`) after the pattern closes, after the build ends, and in the normal view of a sphere. It never stops, so the drawn shape drifts slightly around the solved one. Checks and the cut list always use the solved geometry.
-  - Give slider (0 to 3) in the build bar and in the Display menu. Its own clock (`GIVE_T`), so closing a finished build does not jump.
-- Display menu (toolbar): Depth shading 0 to 150% (0 = every line the same, near or far) and Cable brightness 20 to 200% (above 100% blends cables toward the strut colour).
-- Controls: one Play/Pause button; after the build ends it reads Play and restarts from the start.
+  - Give slider (0 to 3) in the view section. Its own clock (`GIVE_T`), so closing a finished build does not jump.
+- View section: Depth shading 0 to 150% (0 = every line the same, near or far) and Cable brightness 20 to 200% (above 100% blends cables toward the strut colour).
+- Controls: one Play/Pause key; after the build ends it shows Play and restarts from the start.
+
+## Export
+- PNG still (1024 to 4096), and GIF (20 fps) or MP4 (30 fps, H.264 via WebCodecs) clips at 720, 1080 or 1600 px. Same scheme as the Dymaxion studio. gifenc and mp4-muxer load from jsDelivr on first use.
+- Frames are square, drawn off screen by the same `draw(canvas, ctx, opts)` as the view, with line scale `size / 700` so they read like a 700 px view. No selection or hover in exports.
+- Seamless turn: one 360 degree yaw turn over 4 to 40 s (Turn length). The resting give is not periodic, so each frame blends the pose at t with the pose at t - T by u = i/n; the frame after the last is exactly frame 0. Measured: the last-to-first frame step equals an ordinary frame step.
+- Build: runs `beginBuild()` and steps the same clocks as the live view (`step(dt)`), at the build speed, plus 1.5 s of the finished structure. The live loop holds still while `exporting` is set; every clock, the camera and the build state are saved and restored afterwards. A solve that lands mid-export cancels it.
+- Backgrounds: with "Include artboard background" off, PNG and GIF are transparent (GIF soft edges blended toward the artboard colour). MP4 always has one: the artboard, or for Clear, Ink or Paper, whichever suits the strut colour.
+- Saving uses `window.claude.use('downloads')` when the page runs as an artifact, otherwise a download link. The artifact needs the downloads capability for this.
 - The camera starts close on the pattern and aimed at it (`zoom.focus`), with a slow drift, then pulls back as the pattern repeats. No ghost for spheres now; the camera pulls back slowly while flowers 2 to 6 form.
 - Inspiration the user shared (stills): hairlines drawn out from points, small + and x markers, radial bursts, trails, tiny mono labels.
 - Tone: calm and quiet. No orange glow on the first pattern; captions are short lines, not numbers.
