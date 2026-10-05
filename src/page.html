@@ -1,169 +1,337 @@
 <title>Tensegrity Workbench</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: instrument panel on the left, the structure fills the rest; verification and cut list sit under the panel. */
-:root {
-  --paper: #eceef0;
-  --panel: #f7f8f9;
-  --ink: #16191d;
-  --muted: #5d6670;
-  --rule: #d3d8dd;
-  --accent: #a4621c;       /* brass: selection, active controls */
-  --accent-ink: #ffffff;
-  --pass: #2f7d4f;
-  --fail: #b3362c;
-  --warn: #9a6a00;
-  --field: #ffffff;
-  /* viewport is always dark: white rods on black, like the studio photos */
-  --vp-bg: #0b0c0e;
-  --vp-strut: #f2f0ea;
-  --vp-cable: #9aa6b2;
-  --vp-sel: #e39a45;
-  --vp-tension: #e39a45;
-  --vp-compress: #7fb6e8;
-  --vp-text: #8b949e;
-  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
-  --body: "Archivo", "Helvetica Neue", Arial, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #121417; --panel: #181b1f; --ink: #e7eaed; --muted: #98a2ad; --rule: #2a2f35;
-    --accent: #e39a45; --accent-ink: #1a1206; --pass: #5cc28a; --fail: #ef6d62; --warn: #e0b24a; --field: #0f1113;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #121417; --panel: #181b1f; --ink: #e7eaed; --muted: #98a2ad; --rule: #2a2f35;
-  --accent: #e39a45; --accent-ink: #1a1206; --pass: #5cc28a; --fail: #ef6d62; --warn: #e0b24a; --field: #0f1113;
+/* Layout: the structure's artboard set into a grey housing, beside an off-white control face of keys,
+   switches and sliders (after Dieter Rams' Braun work, same as the Dymaxion Sphere Studio).
+   Verification and cut list sit under the artboard; everything stacks on phones. */
+:root {  /* always dark, like the Dymaxion studio in dark mode */
+  --bg: #141413;          /* housing */
+  --panel: #1f1f1e;       /* control face */
+  --well: #2a2a28;        /* recessed key bed */
+  --fg: #e8e6e0;
+  --muted: #8d8b85;
+  --line: rgba(232, 230, 224, 0.1);
+  --track: rgba(232, 230, 224, 0.24);
+  --key: #3a3a38;         /* keys */
+  --key-fg: #e8e6e0;
+  --cap: #d8d6d0;         /* slider caps, switch tongues */
+  --accent: #f26a2c;      /* Braun orange */
+  --accent-ink: #141413;
+  --pass: #5cc28a;
+  --fail: #ef6d62;
+  --warn: #e0b24a;
+  --checker-a: #262624;
+  --checker-b: #1d1d1c;
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: var(--font); --body: var(--font); --mono: var(--font);
   color-scheme: dark;
 }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
-body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.45; }
 * { box-sizing: border-box; }
-.app { display: grid; grid-template-columns: 340px 1fr; height: 100%; min-height: 0; }
-aside { background: var(--panel); border-right: 1px solid var(--rule); overflow-y: auto; padding-block: 20px 28px; padding-inline: 20px; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-header h1 { font-family: var(--display); font-stretch: 118%; font-weight: 700; font-size: 21px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
-header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 34ch; }
-section h2 { font-family: var(--display); font-stretch: 110%; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 0 0 10px; }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-label.f { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-select, input[type="number"], input[type="text"] { font: inherit; font-size: 13px; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; min-width: 0; }
-input[type="number"] { font-family: var(--mono); font-variant-numeric: tabular-nums; width: 100%; }
-select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
-.seg button { font: inherit; font-size: 12px; background: var(--field); color: var(--ink); border: 0; padding: 5px 10px; cursor: pointer; }
-.seg button + button { border-left: 1px solid var(--rule); }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
-.btn { font: inherit; font-size: 12px; font-weight: 600; background: var(--field); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; cursor: pointer; }
-.btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.presets { display: grid; gap: 6px; }
-.presets .btn { text-align: left; font-weight: 500; display: grid; gap: 1px; }
-.presets .btn small { color: var(--muted); font-weight: 400; font-size: 11px; }
-table.groups { width: 100%; border-collapse: collapse; }
-table.groups td { padding: 4px 0; vertical-align: middle; }
-table.groups td:first-child { width: 58%; }
-.swatch { display: inline-block; width: 16px; height: 0; border-top: 1px solid var(--muted); vertical-align: middle; margin-right: 8px; }
-.swatch.s { border-top: 4px solid var(--ink); border-radius: 2px; }
-.hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
-.sel { border: 1px solid var(--accent); border-radius: 6px; padding: 12px; display: grid; gap: 10px; }
-.sel .t { font-weight: 600; }
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 13px/1.4 var(--font);
+       -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
 
-main { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: 1fr auto auto; }
-.rbar { display: flex; align-items: center; gap: 12px; padding-block: 6px; padding-inline: 20px; background: var(--panel); border-top: 1px solid var(--rule); font-size: 12px; }
-.rbar .sum { font-family: var(--display); font-stretch: 110%; font-weight: 600; font-size: 13px; }
-.rbar .sum.ok { color: var(--pass); } .rbar .sum.no { color: var(--fail); }
-.rbar .btn { margin-left: auto; padding: 3px 10px; }
-.rbar .sum:empty { display: none; }
-.app.full { grid-template-columns: 1fr; }
-.app.full aside { display: none; }
-.vp { position: relative; background: var(--vp-bg); min-height: 0; overflow: hidden; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 344px; height: 100%; }
+.app.full { grid-template-columns: minmax(0, 1fr); }
+.app.full .panel { display: none; }
+
+/* ── stage ── */
+.stage { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 14px;
+         padding: 22px 28px; min-width: 0; min-height: 0; }
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* speaker-grille perforation, the one ornament */
+.grille { width: 34px; height: 16px; flex: none;
+          background: radial-gradient(circle, var(--fg) 1.1px, transparent 1.4px) 0 0 / 5.6px 5.4px; opacity: .8; }
+h1 { font: 500 17px/1 var(--font); margin: 0; letter-spacing: -0.005em; }
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+.masthead .hint { margin: 0; }
+.mast-r { display: flex; align-items: center; gap: 6px; }
+
+/* the artboard: viewport colours come from its data-bg, so Ink, Paper and Clear each have their own */
+.board { position: relative; min-height: 0; border-radius: 6px; overflow: hidden;
+         box-shadow: inset 0 0 0 1px var(--line); background: var(--vp-bg);
+         --vp-bg: #141413; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #f26a2c;
+         --vp-tension: #f26a2c; --vp-compress: #7a711e; --vp-text: #8d8b85;
+         --chip: rgba(20, 20, 19, 0.85); --chip-fg: #e8e6e0; --chip-line: rgba(232, 230, 224, 0.14); }
+.board[data-bg="paper"] { --vp-bg: #f2f1ed; --vp-strut: #1d1d1c; --vp-cable: #7d7b75; --vp-sel: #ef5a1f;
+         --vp-tension: #ef5a1f; --vp-compress: #7a711e; --vp-text: #84827d;
+         --chip: rgba(242, 241, 237, 0.92); --chip-fg: #1d1d1c; --chip-line: rgba(29, 29, 28, 0.12); }
+.board[data-bg="clear"] { --vp-bg: transparent; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #f26a2c;
+         --vp-tension: #f26a2c; --vp-compress: #7a711e; --vp-text: #8d8b85;
+         --chip: rgba(20, 20, 19, 0.85); --chip-fg: #e8e6e0; --chip-line: rgba(232, 230, 224, 0.14);
+         background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 20px 20px; }
 canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 canvas.drag { cursor: grabbing; }
-.vp .tl { position: absolute; left: 16px; top: 14px; color: var(--vp-text); font-family: var(--mono); font-size: 12px; pointer-events: none; }
-.vp .tl b { color: var(--vp-strut); font-family: var(--display); font-stretch: 115%; font-size: 15px; font-weight: 600; display: block; margin-bottom: 2px; }
-.vp .tr { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.vp .tr button { font: inherit; font-size: 12px; background: rgba(255,255,255,0.06); color: var(--vp-strut); border: 1px solid rgba(255,255,255,0.16); border-radius: 4px; padding: 5px 9px; cursor: pointer; }
-.vp .tr button[aria-pressed="true"] { border-color: var(--vp-sel); color: var(--vp-sel); }
-.dpanel { position: absolute; right: 12px; top: 48px; width: 260px; max-width: calc(100% - 24px); background: rgba(12,13,15,0.92); border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; display: grid; gap: 10px; color: var(--vp-text); font-family: var(--mono); font-size: 12px; z-index: 2; }
-.dpanel label { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; }
-.dpanel label input { grid-column: 1 / -1; width: 100%; accent-color: var(--vp-sel); }
-.dpanel label span { color: var(--vp-strut); font-variant-numeric: tabular-nums; }
-.dpanel .hintd { font-family: var(--body); font-size: 11px; line-height: 1.4; }
-.vp .legend { position: absolute; left: 16px; bottom: 12px; color: var(--vp-text); font-size: 11px; font-family: var(--mono); display: flex; gap: 14px; pointer-events: none; }
-.vp .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
-.anim { position: absolute; left: 16px; right: 16px; bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--vp-text); font-family: var(--mono); font-size: 12px; }
-.anim button { font: inherit; background: rgba(255,255,255,0.06); color: var(--vp-strut); border: 1px solid rgba(255,255,255,0.16); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
-.anim .aspeed { display: inline-flex; align-items: center; gap: 8px; }
-.anim .aspeed input[type="range"] { flex: 0 0 140px; min-width: 100px; }
-.anim .aspeed span { min-width: 3.2em; color: var(--vp-strut); font-variant-numeric: tabular-nums; }
-.anim input[type="range"] { flex: 1 1 160px; min-width: 120px; accent-color: var(--vp-sel); }
-.anim .cap { flex: 1 1 100%; order: -1; color: var(--vp-strut); font-family: var(--display); font-stretch: 110%; font-size: 14px; }
-.anim .cap small { color: var(--vp-text); font-family: var(--mono); font-size: 11px; margin-left: 8px; }
-.busy { position: absolute; right: 16px; bottom: 12px; font-family: var(--mono); font-size: 11px; color: var(--vp-sel); }
+.board .tl { position: absolute; left: 14px; top: 13px; color: var(--vp-text); font-size: 11.5px; pointer-events: none; }
+.board .tl b { color: var(--vp-strut); font: 500 14px/1.2 var(--font); display: block; margin-bottom: 2px; }
+.board .legend { position: absolute; left: 14px; bottom: 12px; color: var(--vp-text); font-size: 11px; display: flex; gap: 14px; pointer-events: none; }
+.board .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+.busy { position: absolute; right: 12px; top: 12px; font: 500 11px/1 var(--font); padding: 7px 9px; border-radius: 3px;
+        background: var(--chip); color: var(--chip-fg); pointer-events: none; }
+.busy.rec::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+                    margin-right: 7px; vertical-align: 1px; }
 
-.report { background: var(--panel); border-top: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0; max-height: 44vh; overflow-y: auto; }
-.report > div { padding: 16px 20px; min-width: 0; }
-.report > div + div { border-left: 1px solid var(--rule); }
-.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
-.checks li { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: baseline; }
-.pill { font-family: var(--mono); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; text-align: center; padding: 2px 0; border-radius: 3px; border: 1px solid currentColor; }
-.pill.ok { color: var(--pass); } .pill.no { color: var(--fail); } .pill.warn { color: var(--warn); } .pill.info { color: var(--muted); }
-.checks .d { font-size: 13px; }
-.checks .d small { display: block; color: var(--muted); font-size: 11.5px; font-family: var(--mono); }
-.verdict { font-family: var(--display); font-stretch: 112%; font-weight: 700; font-size: 16px; margin: 0 0 12px; }
+/* build transport, laid on the artboard like the studio's phase label */
+.anim { position: absolute; left: 12px; right: 12px; bottom: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center; gap: 0 12px; padding: 8px 10px; border-radius: 4px; background: var(--chip); color: var(--chip-fg);
+        box-shadow: inset 0 0 0 1px var(--chip-line); max-width: 560px; }
+.anim .cap { grid-column: 2; grid-row: 1; font: 500 12px/1.3 var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 2px; }
+.anim .key { grid-row: 1 / span 2; grid-column: 1; }
+.anim input[type="range"] { grid-column: 2; grid-row: 2; height: 18px; }
+.anim .x { grid-row: 1 / span 2; grid-column: 3; }
+.anim .cap small { color: var(--vp-text); font-size: 11px; font-weight: 400; margin-left: 8px; }
+.anim .key { width: 32px; height: 32px; }
+.anim .key.play { width: 32px; height: 32px; }
+.anim input[type="range"] { --track: var(--chip-line); --cap: var(--chip-fg); }
+.anim input[type="range"]::-webkit-slider-runnable-track { background: var(--chip-line); }
+.anim input[type="range"]::-moz-range-track { background: var(--chip-line); }
+.anim input[type="range"]::-webkit-slider-thumb { background: var(--chip-fg); }
+.anim input[type="range"]::-moz-range-thumb { background: var(--chip-fg); }
+.anim .x { width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: var(--chip-fg); cursor: pointer;
+           font: 400 16px/1 var(--font); opacity: .7; }
+.anim .x:hover { opacity: 1; background: var(--chip-line); }
+
+/* verdict strip and the report under the artboard */
+.rbar { display: flex; align-items: center; gap: 12px; font-size: 12px; min-height: 28px; }
+.rbar .sum { font-weight: 500; font-size: 13px; }
+.rbar .sum.ok { color: var(--pass); } .rbar .sum.no { color: var(--fail); }
+.rbar .sum::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 8px; vertical-align: 1px; }
+.rbar .btn { margin-left: auto; }
+.rbar .sum:empty { display: none; }
+.report { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); column-gap: 28px; max-height: 32vh; overflow-y: auto;
+          border-top: 1px solid var(--line); }
+.report > div { padding: 16px 0 4px; min-width: 0; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.checks li { display: grid; grid-template-columns: 50px 1fr; gap: 10px; align-items: baseline; }
+.pill { font-size: 10px; font-weight: 500; text-transform: lowercase; text-align: center; padding: 3px 0; border-radius: 3px;
+        background: var(--well); color: var(--muted); position: relative; }
+.pill.ok { background: var(--key); color: var(--key-fg); }
+.pill.no { background: var(--accent); color: var(--accent-ink); }
+.pill.warn { box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); background: transparent; }
+.checks .d { font-size: 12.5px; font-weight: 500; }
+.checks .d small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
+.verdict { font: 500 15px/1.2 var(--font); margin: 0 0 12px; }
 .verdict.ok { color: var(--pass); } .verdict.no { color: var(--fail); }
-table.cut { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.cut th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 8px 6px 0; border-bottom: 1px solid var(--rule); }
-table.cut td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-variant-numeric: tabular-nums; }
-table.cut td:first-child { font-family: var(--body); }
-table.cut td.n { text-align: right; }
+.rh { margin: 0 0 10px; font: 500 11px/1 var(--font); color: var(--muted); text-transform: lowercase; letter-spacing: 0.01em; }
+table.cut { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.cut th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; text-transform: lowercase; padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); }
+table.cut td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); }
+table.cut td.n, table.cut th.n { text-align: right; }
 .bench td { font-size: 12px; }
-.copyrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-textarea.out { width: 100%; height: 90px; font-family: var(--mono); font-size: 11px; background: var(--field); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; margin-top: 8px; }
-.src { font-size: 11.5px; color: var(--muted); }
-.src a { color: inherit; }
+.copyrow { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+textarea.out { width: 100%; height: 90px; font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--well); color: var(--fg);
+               border: 0; border-radius: 3px; margin-top: 8px; padding: 8px; }
+.swatch { display: inline-block; width: 16px; height: 0; border-top: 1px solid var(--muted); vertical-align: middle; margin-right: 8px; }
+.swatch.s { border-top: 4px solid var(--fg); border-radius: 1px; }
+
+/* ── control face ── */
+.panel { position: relative; background: var(--panel); box-shadow: -1px 0 0 var(--line); overflow-y: auto; padding-block: 6px 28px; padding-inline: 22px; min-width: 0; }
+section { display: grid; gap: 12px; padding-block: 18px; border-bottom: 1px solid var(--line); }
+section:last-child { border-bottom: 0; }
+h2 { margin: 0; font: 500 11px/1 var(--font); color: var(--muted); text-transform: lowercase; letter-spacing: 0.01em; }
+.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px; }
+.row label, .row .lbl { font-weight: 500; }
+.val { font: 400 12px var(--font); color: var(--muted); text-align: right; }
+.row input[type="range"] { grid-column: 1 / -1; }
+.note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.note a { color: inherit; }
+.mono { font-variant-numeric: tabular-nums; }
+
+label.f { display: grid; gap: 6px; font-weight: 500; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+select, input[type="number"], input[type="text"] { height: 34px; border-radius: 3px; border: 0; background: var(--well); color: var(--fg);
+         font: 400 12.5px var(--font); padding: 0 9px; box-shadow: inset 0 -1px 0 var(--line); min-width: 0; width: 100%; }
+input[type="number"] { font-variant-numeric: tabular-nums; }
+input:disabled { opacity: .45; }
+select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* member lengths */
+table.groups { width: 100%; border-collapse: collapse; }
+table.groups td { padding: 4px 0; vertical-align: middle; font-weight: 500; }
+table.groups td:first-child { width: 60%; padding-right: 10px; }
+table.groups td .cnt { color: var(--muted); font-weight: 400; }
+table.groups td.hint { font-weight: 400; }
+
+/* sliders: thin rail, rectangular cap */
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; margin: 0; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--track); }
+input[type="range"]::-moz-range-track { height: 2px; background: var(--track); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 20px; margin-top: -9px;
+         border-radius: 2px; background: var(--cap); box-shadow: 0 1px 1px rgba(0,0,0,.18); }
+input[type="range"]::-moz-range-thumb { width: 10px; height: 20px; border: 0; border-radius: 2px; background: var(--cap); }
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+
+/* view switches */
+.layers { display: grid; gap: 0; }
+.layer { position: relative; display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 12px;
+         padding: 8px 0; cursor: pointer; border-top: 1px solid var(--line); }
+.layer:first-child { border-top: 0; }
+.layer input { position: absolute; opacity: 0; pointer-events: none; }
+.layer svg { width: 30px; height: 20px; overflow: visible; }
+.layer svg * { fill: none; stroke: var(--fg); stroke-linecap: round; }
+.layer .name { font-weight: 500; }
+.layer .count { font-size: 11px; color: var(--muted); }
+.layer .meta { display: grid; gap: 1px; }
+/* slide switch with an indicator lamp */
+.layer .sw { width: 30px; height: 16px; border-radius: 3px; background: var(--well); position: relative; box-shadow: inset 0 0 0 1px var(--line); }
+.layer .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 2px;
+                    background: var(--track); transition: transform .15s, background .15s; }
+.layer input:checked ~ .sw::after { transform: translateX(14px); background: var(--cap); }
+.layer[data-accent] input:checked ~ .sw::after { background: var(--accent); }
+.layer input:not(:checked) ~ svg, .layer input:not(:checked) ~ .meta { opacity: .42; }
+.layer input:focus-visible ~ .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+.layer[data-accent] svg * { stroke: var(--accent); }
+
+/* push-button rows with indicator lamps: radio inputs + labels, or buttons with aria-pressed */
+.seg { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg label, .seg button { position: relative; display: grid; justify-items: center; gap: 2px; padding: 15px 4px 8px; cursor: pointer;
+             text-align: center; font: 500 12px/1.2 var(--font); border: 0; border-radius: 3px; background: var(--well); color: var(--fg);
+             box-shadow: inset 0 -1px 0 var(--line); }
+.seg label::before, .seg button::before { content: ""; position: absolute; top: 6px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px;
+             border-radius: 50%; background: var(--track); }
+.seg label small, .seg button small { font-size: 10px; font-weight: 400; color: var(--muted); }
+.seg label:hover, .seg button:hover { background: var(--line); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg input:checked + label, .seg button[aria-pressed="true"] { background: var(--key); color: var(--key-fg); box-shadow: none; }
+.seg input:checked + label::before, .seg button[aria-pressed="true"]::before { background: var(--accent); }
+.seg input:checked + label small, .seg button[aria-pressed="true"] small { color: var(--key-fg); opacity: .6; }
+.seg input:focus-visible + label, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.check { display: grid; grid-template-columns: 14px 1fr; align-items: center; gap: 2px 10px; cursor: pointer; font-weight: 500; }
+.check input { accent-color: var(--cap); width: 14px; height: 14px; margin: 0; }
+.check small { grid-column: 2; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.check:has(input:disabled) { opacity: .45; cursor: default; }
+
+/* round transport keys */
+.key { width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; flex: none;
+       background: var(--key); color: var(--key-fg); box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
+.key svg { width: 12px; height: 12px; fill: currentColor; }
+.key:active { transform: translateY(1px); box-shadow: inset 0 -1px 0 rgba(0,0,0,.25); }
+.key.play { background: var(--accent); color: var(--accent-ink); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px;
+       border-radius: 3px; border: 0; background: var(--well); color: var(--fg); font: 500 13px var(--font);
+       cursor: pointer; box-shadow: inset 0 -1px 0 var(--line); text-align: center; }
+.btn:hover { background: var(--line); }
+.btn:active { transform: translateY(1px); }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+.btn.primary { background: var(--key); color: var(--key-fg); box-shadow: none; }
+.btn.primary:hover { filter: brightness(1.15); }
+.btn[aria-pressed="true"] { background: var(--key); color: var(--key-fg); box-shadow: none; }
+.btn:focus-visible, .key:focus-visible, .x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: .45; cursor: default; transform: none; }
+.btn.busy { background: var(--accent); color: var(--accent-ink); }
+.transport { display: flex; gap: 6px; }
+.grow { flex: 1; }
+.exports { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.exports.three { grid-template-columns: 1fr 1fr 84px; }
+.exports select { height: 36px; }
+.progress { height: 3px; background: var(--well); border-radius: 2px; overflow: hidden; }
+.progress span { display: block; height: 100%; width: 0; background: var(--accent); }
+
+.presets { display: grid; gap: 4px; }
+.presets .btn { height: auto; padding: 10px 12px; display: grid; justify-items: start; justify-content: stretch; gap: 2px; text-align: left; }
+.presets .btn small { color: var(--muted); font-weight: 400; font-size: 11px; line-height: 1.35; }
+
+.sel { border-radius: 3px; padding: 12px; display: grid; gap: 10px; box-shadow: inset 0 0 0 1px var(--accent); }
+.sel .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.sel .t { font-weight: 500; }
+.sel .seg { flex: 1; min-width: 150px; }
+.sel .seg button { padding-block: 13px 6px; }
+.sel input[type="number"] { width: 110px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+         background: var(--key); color: var(--key-fg); padding: 10px 14px; border-radius: 3px; font-weight: 500;
+         opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 5; }
+.toast.show { opacity: 1; }
 
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; height: auto; }
-  aside { border-right: 0; border-bottom: 1px solid var(--rule); order: 2; overflow: visible; }
-  main { order: 1; grid-template-rows: 62vh auto auto; }
-  .app.full { grid-template-columns: 1fr; }
-  .app.full main { grid-template-rows: 88vh auto auto; }
-  .report { grid-template-columns: 1fr; max-height: none; }
-  .report > div + div { border-left: 0; border-top: 1px solid var(--rule); }
+  html, body { height: auto; }
+  .app, .app.full { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .stage { padding: 16px; grid-template-rows: auto 62vh auto auto; }
+  .app.full .stage { grid-template-rows: auto 82vh auto auto; }
+  .panel { box-shadow: 0 -1px 0 var(--line); overflow: visible; padding-inline: 16px; }
+  .report { grid-template-columns: minmax(0, 1fr); max-height: none; }
+  .report > div + div { border-top: 1px solid var(--line); }
 }
+@media (max-width: 1240px) { .masthead .hint { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="app">
-  <aside>
-    <header>
-      <h1>Tensegrity Workbench</h1>
-      <p>Set the cable lengths. The struts grow until the cable web stops them. Every result is checked for equilibrium and stability.</p>
-    </header>
+  <main class="stage">
+    <div class="masthead">
+      <div class="brand"><span class="grille" aria-hidden="true"></span><h1>Tensegrity Workbench</h1></div>
+      <span class="hint">Drag to turn · scroll to zoom · click a member to set it</span>
+      <div class="mast-r">
+        <button class="btn sm" id="bReset">Reset view</button>
+        <button class="btn sm" id="bFull" aria-pressed="false" title="Hide the panel and the details so the structure fills the window">Full view</button>
+      </div>
+    </div>
 
+    <div class="board" id="board" data-bg="ink">
+      <canvas id="cv" aria-label="3D view of the tensegrity. Drag to rotate, scroll to zoom, click a member to select it."></canvas>
+      <div class="tl"><b id="vpName">3-strut prism</b><span id="vpSub"></span></div>
+      <div class="legend" id="legend"></div>
+      <div class="anim" id="anim" hidden>
+        <div class="cap" id="aCap"></div>
+        <button class="key play" id="aPlay" aria-label="Pause"></button>
+        <input type="range" id="aScrub" min="0" max="1000" value="0" aria-label="Build timeline">
+        <button class="x" id="aClose" aria-label="Close the build">×</button>
+      </div>
+      <div class="busy" id="busy" hidden>Solving…</div>
+    </div>
+
+    <div class="rbar">
+      <span class="sum" id="rbSum"></span>
+      <button class="btn sm" id="bDetails" aria-expanded="true" aria-controls="report">Hide details</button>
+    </div>
+    <div class="report" id="report">
+      <div>
+        <p class="verdict" id="verdict">…</p>
+        <ul class="checks" id="checks"></ul>
+        <div class="copyrow" id="tightWrap" hidden><button class="btn primary" id="bTight">Tighten slack cables</button><span class="hint" id="tightNote" style="margin:0;align-self:center"></span></div>
+      </div>
+      <div>
+        <h2 class="rh">Cut list</h2>
+        <table class="cut"><thead><tr><th>Member</th><th class="n">Qty</th><th class="n">Length</th><th class="n">Force</th></tr></thead><tbody id="cut"></tbody></table>
+        <div id="extra"></div>
+        <div class="copyrow">
+          <button class="btn sm" id="cpCsv">Copy cut list</button>
+          <button class="btn sm" id="cpJson">Copy model JSON</button>
+        </div>
+        <textarea class="out" id="out" readonly hidden aria-label="Exported data"></textarea>
+      </div>
+      <div>
+        <h2 class="rh">Solver benchmarks</h2>
+        <table class="cut bench"><thead><tr><th>Case</th><th class="n">Published</th><th class="n">Here</th></tr></thead><tbody id="bench"><tr><td colspan="3">Running…</td></tr></tbody></table>
+        <p class="hint">Run live in your browser on load, with the same solver used above.</p>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel">
     <section>
       <h2>Structure</h2>
+      <p class="note">Set the cable lengths. The struts grow until the cable web stops them. Every result is checked for equilibrium and stability.</p>
+      <label class="f">Family
+        <select id="family">
+          <option value="sphere">Sphere (repeating pattern)</option>
+          <option value="prism">Prism (n struts)</option>
+          <option value="tower">Snelson tower</option>
+          <option value="tetra">Truncated tetrahedron · 6</option>
+          <option value="octa">Truncated octahedron · 12</option>
+          <option value="cube">Truncated cube · 12</option>
+          <option value="icosa">Truncated icosahedron · 30</option>
+          <option value="dodeca">Truncated dodecahedron · 30</option>
+          <option value="icosa6">Expanded octahedron · 6</option>
+        </select>
+      </label>
       <div class="grid2">
-        <label class="f">Family
-          <select id="family">
-            <option value="sphere">Sphere (repeating pattern)</option>
-            <option value="prism">Prism (n struts)</option>
-            <option value="tower">Snelson tower</option>
-            <option value="tetra">Truncated tetrahedron · 6</option>
-            <option value="octa">Truncated octahedron · 12</option>
-            <option value="cube">Truncated cube · 12</option>
-            <option value="icosa">Truncated icosahedron · 30</option>
-            <option value="dodeca">Truncated dodecahedron · 30</option>
-            <option value="icosa6">Expanded octahedron · 6</option>
-          </select>
-        </label>
         <label class="f" id="nwrap">Struts per module
           <input id="n" type="number" min="3" max="12" step="1" value="3">
         </label>
@@ -179,27 +347,105 @@ textarea.out { width: 100%; height: 90px; font-family: var(--mono); font-size: 1
         <label class="f" id="kwrap" hidden>Modules
           <input id="k" type="number" min="2" max="10" step="1" value="4">
         </label>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <span class="hint" style="margin:0">Twist</span>
-        <div class="seg" role="group" aria-label="Twist direction">
-          <button id="chirR" aria-pressed="true">Right</button><button id="chirL" aria-pressed="false">Left</button>
-        </div>
-        <label class="f" style="margin-left:auto; grid-auto-flow: column; align-items:center; gap:6px">Units
-          <input id="units" type="text" value="cm" style="width:56px">
+        <label class="f">Units
+          <input id="units" type="text" value="cm">
         </label>
+      </div>
+      <div class="row"><span class="lbl">Twist</span></div>
+      <div class="seg" role="group" aria-label="Twist direction">
+        <button id="chirR" aria-pressed="true">Right<small>right-handed</small></button><button id="chirL" aria-pressed="false">Left<small>left-handed</small></button>
       </div>
     </section>
 
     <section>
       <h2>Member lengths</h2>
       <table class="groups"><tbody id="groups"></tbody></table>
-      <p class="hint">Cables are fixed lengths. Struts marked grow share one scale and keep these ratios. Click any member in the view to set it on its own.</p>
+      <p class="note">Cables are fixed lengths. Struts marked grow share one scale and keep these ratios. Click any member in the view to set it on its own.</p>
     </section>
 
     <section id="selbox" hidden>
       <h2>Selected member</h2>
       <div class="sel" id="sel"></div>
+    </section>
+
+    <section>
+      <h2>View</h2>
+      <div class="layers">
+        <label class="layer"><input type="checkbox" id="bSpin" checked>
+          <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
+          <span class="meta"><span class="name">Rotate</span><span class="count" id="spinNote">one turn about the vertical</span></span><span class="sw"></span></label>
+        <label class="layer" data-accent><input type="checkbox" id="bForce">
+          <svg viewBox="0 0 34 22"><path d="M4 18 L30 4" stroke-width="3"/><path d="M4 4 L30 18" stroke-width="1"/></svg>
+          <span class="meta"><span class="name">Forces</span><span class="count">width shows each member's load</span></span><span class="sw"></span></label>
+        <label class="layer"><input type="checkbox" id="bNodes">
+          <svg viewBox="0 0 34 22"><circle cx="9" cy="14" r="2.2" stroke-width="1.2"/><path d="M14 8 L14 3 M14 3 L12 5 M19 3 L19 8 M17 3 L21 3" stroke-width="1"/></svg>
+          <span class="meta"><span class="name">Node ids</span><span class="count">number every joint</span></span><span class="sw"></span></label>
+        <label class="layer" id="scaleWrap"><input type="checkbox" id="bScale" checked>
+          <svg viewBox="0 0 34 22"><circle cx="10" cy="11" r="5" stroke-width="1.2"/><circle cx="23" cy="11" r="8.5" stroke-width="1.2"/></svg>
+          <span class="meta"><span class="name">Fixed scale</span><span class="count">sphere grows with repeats</span></span><span class="sw"></span></label>
+      </div>
+      <div class="row"><span class="lbl">Artboard</span></div>
+      <div class="seg three" role="radiogroup" aria-label="Artboard background">
+        <input type="radio" name="bg" id="bg_ink" value="ink" checked><label for="bg_ink">Ink</label>
+        <input type="radio" name="bg" id="bg_paper" value="paper"><label for="bg_paper">Paper</label>
+        <input type="radio" name="bg" id="bg_clear" value="clear"><label for="bg_clear">Clear</label>
+      </div>
+      <div class="row">
+        <label for="shade">Depth shading</label><span class="val" id="shVal">100%</span>
+        <input type="range" id="shade" min="0" max="150" value="100">
+      </div>
+      <div class="row">
+        <label for="cable">Cable brightness</label><span class="val" id="cbVal">100%</span>
+        <input type="range" id="cable" min="20" max="200" value="100">
+      </div>
+      <div class="row" title="How much the pattern flexes along its own soft directions">
+        <label for="give2">Give</label><span class="val" id="gvVal2">1×</span>
+        <input type="range" id="give2" min="0" max="300" value="100">
+      </div>
+      <p class="note">0% shading draws every line the same, near or far. Above 100%, cables blend toward the strut colour.</p>
+    </section>
+
+    <section>
+      <h2>Build</h2>
+      <div class="transport">
+        <button class="btn primary grow" id="bBuild" aria-pressed="false" title="Watch the structure go together, one repeat at a time">Watch it build</button>
+      </div>
+      <div class="row">
+        <label for="aSpeed">Speed</label><span class="val" id="aSpeedVal">1×</span>
+        <input type="range" id="aSpeed" min="0" max="1000" value="400">
+      </div>
+    </section>
+
+    <section>
+      <h2>Export</h2>
+      <div class="exports">
+        <button class="btn" id="exPng">PNG still</button>
+        <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
+      </div>
+      <div class="row"><span class="lbl">Motion</span><span class="val" id="clipInfo"></span></div>
+      <div class="seg" role="radiogroup" aria-label="Clip">
+        <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
+        <input type="radio" name="clip" id="clip_build" value="build"><label for="clip_build">Build<small>start to finish</small></label>
+      </div>
+      <div class="row" id="turnRow">
+        <label for="turnSecs">Turn length</label><span class="val" id="turnVal"></span>
+        <input type="range" id="turnSecs" min="4" max="40" step="1" value="35">
+      </div>
+      <div class="row">
+        <label for="gifRate">GIF frame rate</label>
+        <select id="gifRate" style="width:auto">
+          <option value="10">10 fps</option><option value="8">12.5 fps</option><option value="6">16.7 fps</option>
+          <option value="5" selected>20 fps</option><option value="4">25 fps</option><option value="3">33 fps</option><option value="2">50 fps</option>
+        </select>
+      </div>
+      <label class="check"><input type="checkbox" id="exportBg" checked><span>Include artboard background</span><small>off = transparent PNG and GIF</small></label>
+      <div class="exports three">
+        <button class="btn primary" id="exGif">GIF</button>
+        <button class="btn primary" id="exMp4">MP4</button>
+        <select id="motionSize" aria-label="Clip size"><option value="720" selected>720</option><option value="1080">1080</option><option value="1600">1600</option></select>
+      </div>
+      <div class="progress" id="progress" hidden><span id="progressBar"></span></div>
+      <p class="note" id="clipNote">Clips are square and use the current view, zoom and artboard. The build clip plays at the build speed above; at 1× a sphere takes about 40 s, so MP4 is much smaller than GIF. MP4 always has a background.</p>
     </section>
 
     <section>
@@ -209,7 +455,7 @@ textarea.out { width: 100%; height: 90px; font-family: var(--mono); font-size: 1
         <button class="btn" id="pTetra">Truncated tetrahedron<small>Rings b = 20, cross cables c = 20. Compared with his eq. 18–22.</small></button>
         <button class="btn" id="pTetraC">Tetrahedron, long cross cables<small>b = 20, c = 30. Longer c, longer struts.</small></button>
       </div>
-      <p class="src">Method from Marcelo Pars, <a href="http://www.tensegriteit.nl/e-wiskunde4.html" target="_blank" rel="noopener">tetrahedron</a> and <a href="http://www.tensegriteit.nl/e-wiskunde5.html" target="_blank" rel="noopener">dissimilar</a>.</p>
+      <p class="note">Method from Marcelo Pars, <a href="http://www.tensegriteit.nl/e-wiskunde4.html" target="_blank" rel="noopener">tetrahedron</a> and <a href="http://www.tensegriteit.nl/e-wiskunde5.html" target="_blank" rel="noopener">dissimilar</a>.</p>
     </section>
 
     <section>
@@ -219,66 +465,9 @@ textarea.out { width: 100%; height: 90px; font-family: var(--mono); font-size: 1
       </label>
     </section>
   </aside>
-
-  <main>
-    <div class="vp">
-      <canvas id="cv" aria-label="3D view of the tensegrity. Drag to rotate, scroll to zoom, click a member to select it."></canvas>
-      <div class="tl"><b id="vpName">3-strut prism</b><span id="vpSub"></span></div>
-      <div class="tr">
-        <button id="bScale" aria-pressed="true" title="Keep one scale while you change repeats, so the sphere visibly grows">Fixed scale</button>
-        <button id="bBuild" aria-pressed="false" title="Watch the structure go together, one repeat at a time">Build</button>
-        <button id="bSpin" aria-pressed="true">Rotate</button>
-        <button id="bForce" aria-pressed="false">Forces</button>
-        <button id="bNodes" aria-pressed="false">Node ids</button>
-        <button id="bReset">Reset view</button>
-        <button id="bDisplay" aria-pressed="false" aria-expanded="false" aria-controls="dpanel">Display</button>
-        <button id="bFull" aria-pressed="false" title="Hide the side and lower panels so the structure fills the window">Full view</button>
-      </div>
-      <div class="dpanel" id="dpanel" hidden>
-        <label>Depth shading <span id="shVal">100%</span><input type="range" id="shade" min="0" max="150" value="100" aria-label="Depth shading"></label>
-        <label>Cable brightness <span id="cbVal">100%</span><input type="range" id="cable" min="20" max="200" value="100" aria-label="Cable brightness"></label>
-        <label>Give <span id="gvVal2">1×</span><input type="range" id="give2" min="0" max="300" value="100" aria-label="Elastic give"></label>
-        <div class="hintd">0% shading draws every line the same, near or far. Above 100%, cables blend toward the strut colour.</div>
-      </div>
-      <div class="legend" id="legend"></div>
-      <div class="anim" id="anim" hidden>
-        <div class="cap" id="aCap"></div>
-        <button id="aPlay">Pause</button>
-        <input type="range" id="aScrub" min="0" max="1000" value="0" aria-label="Build timeline">
-        <label class="aspeed">Speed <input type="range" id="aSpeed" min="0" max="1000" value="400" aria-label="Build speed"> <span id="aSpeedVal">1×</span></label>
-        <label class="aspeed" title="How much the pattern flexes along its own soft directions while it forms">Give <input type="range" id="aGive" min="0" max="300" value="100" aria-label="Elastic give"> <span id="aGiveVal">1×</span></label>
-        <button id="aClose">Close</button>
-      </div>
-      <div class="busy" id="busy" hidden>Solving…</div>
-    </div>
-    <div class="rbar">
-      <span class="sum" id="rbSum"></span>
-      <button class="btn" id="bDetails" aria-expanded="true" aria-controls="report">Hide details</button>
-    </div>
-    <div class="report" id="report">
-      <div>
-        <p class="verdict" id="verdict">…</p>
-        <ul class="checks" id="checks"></ul>
-        <div class="copyrow" id="tightWrap" hidden><button class="btn primary" id="bTight">Tighten slack cables</button><span class="hint" id="tightNote" style="margin:0;align-self:center"></span></div>
-      </div>
-      <div>
-        <h2 style="font-family:var(--display);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px">Cut list</h2>
-        <table class="cut"><thead><tr><th>Member</th><th class="n">Qty</th><th class="n">Length</th><th class="n">Force</th></tr></thead><tbody id="cut"></tbody></table>
-        <div id="extra"></div>
-        <div class="copyrow">
-          <button class="btn" id="cpCsv">Copy cut list</button>
-          <button class="btn" id="cpJson">Copy model JSON</button>
-        </div>
-        <textarea class="out" id="out" readonly hidden aria-label="Exported data"></textarea>
-      </div>
-      <div>
-        <h2 style="font-family:var(--display);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px">Solver benchmarks</h2>
-        <table class="cut bench"><thead><tr><th>Case</th><th class="n">Published</th><th class="n">Here</th></tr></thead><tbody id="bench"><tr><td colspan="3">Running…</td></tr></tbody></table>
-        <p class="hint">Run live in your browser on load, with the same solver used above.</p>
-      </div>
-    </div>
-  </main>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
 
 <script id="tgsrc">
 /*SOLVER*/
@@ -345,6 +534,7 @@ const S = {
   struct: null, over: {}, sel: -1,
   result: null, verify: null, model: null,
   view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
+  bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
 
@@ -385,10 +575,11 @@ function solve() {
       return;
     }
     $('busy').hidden = true;
-    S.model = md; S.shown = st; S.result = r; S.verify = data.v;
+    if (exporting) exporting.cancel = true;
+    S.model = md; S.shown = st; S.result = r; S.verify = data.v; buildEnd = null;
     if (S.sel >= md.members.length) S.sel = -1;
     if (ANIM.on) stopBuild();
-    fitView(); renderReport(); renderSel();
+    fitView(); renderReport(); renderSel(); syncClip();
     if (!ANIM.autoDone && S.shown.repeats && !reduce.matches) { ANIM.autoDone = true; startBuild(); }
   });
 }
@@ -400,7 +591,7 @@ function renderGroups() {
     const count = s.members.filter(m => m.group === id).length;
     const tr = document.createElement('tr');
     const val = g.kind === 'c' ? g.len : g.ratio;
-    tr.innerHTML = `<td><span class="swatch ${g.kind}"></span>${g.label} <span class="mono" style="color:var(--muted)">×${count}</span></td>
+    tr.innerHTML = `<td><span class="swatch ${g.kind}"></span>${g.label} <span class="cnt">×${count}</span></td>
       <td><label class="f" style="display:block"><span class="sr" hidden>${g.label}</span>
       <input type="number" id="g_${id}" step="${g.kind === 'c' ? 0.1 : 0.05}" min="0.01" value="${val}" aria-label="${g.label} ${g.kind === 'c' ? 'length' : 'ratio'}"></label></td>`;
     tb.appendChild(tr);
@@ -423,12 +614,12 @@ function renderSel() {
   const g = S.shown.groups[m.group];
   const isS = m.kind === 's';
   const q = S.verify.q[S.sel];
-  el.innerHTML = `<div class="row"><span class="t">${isS ? 'Strut' : 'Cable'} ${S.sel}</span><span class="mono" style="color:var(--muted)">nodes ${m.a}–${m.b} · ${esc(g.label)}</span></div>
-    <div class="row mono" style="gap:16px"><span>${fmt(L)} ${esc(S.units)}</span><span style="color:var(--muted)">force ${fmt(Math.abs(q * L) / maxForce(), 3)} ${isS ? 'compression' : 'tension'}</span></div>
+  el.innerHTML = `<div class="row"><span class="t">${isS ? 'Strut' : 'Cable'} ${S.sel}</span><span style="color:var(--muted)">nodes ${m.a}–${m.b} · ${esc(g.label)}</span></div>
+    <div class="row"><span>${fmt(L)} ${esc(S.units)}</span><span style="color:var(--muted)">force ${fmt(Math.abs(q * L) / maxForce(), 3)} ${isS ? 'compression' : 'tension'}</span></div>
     ${isS ? `<div class="row"><div class="seg" role="group" aria-label="Strut length mode"><button id="mGrow" aria-pressed="${m.mode === 'grow'}">Grow</button><button id="mFix" aria-pressed="${m.mode === 'fixed'}">Fixed</button></div>
-      <input type="number" id="selLen" step="0.1" min="0.01" style="width:110px" value="${m.mode === 'fixed' ? m.len : fmt(L)}" ${m.mode === 'grow' ? 'disabled' : ''} aria-label="Fixed strut length"></div>`
-    : `<div class="row"><label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Length <input type="number" id="selLen" step="0.1" min="0.01" style="width:110px" value="${m.len}"></label></div>`}
-    <div class="row"><button class="btn" id="selReset">Use group value</button><button class="btn" id="selClose">Deselect</button></div>`;
+      <input type="number" id="selLen" step="0.1" min="0.01" value="${m.mode === 'fixed' ? m.len : fmt(L)}" ${m.mode === 'grow' ? 'disabled' : ''} aria-label="Fixed strut length"></div>`
+    : `<div class="row"><label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Length <input type="number" id="selLen" step="0.1" min="0.01" value="${m.len}"></label></div>`}
+    <div class="row"><button class="btn sm" id="selReset">Use group value</button><button class="btn sm" id="selClose">Deselect</button></div>`;
   const i = S.sel;
   if (isS) {
     $('mGrow').onclick = () => { S.over[i] = { ...(S.over[i] || {}), mode: 'grow' }; delete S.over[i].len; solveSoon(0); };
@@ -499,7 +690,7 @@ function renderReport() {
     const cl = v.classes, show = cl.slice(0, 8);
     const row = c => { const st = c.forces.filter(x => x.kind === 's'), cb = c.forces.filter(x => x.kind === 'c'), sf = st.length ? st[0].f : 1;
       return `<tr><td class="n">${c.count}</td><td class="n">${st.length ? '1.000' : '–'}</td><td>${cb.map(x => (x.f / sf).toFixed(3)).join(' · ')}</td></tr>`; };
-    extra += `<h2 style="font-family:var(--display);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:16px 0 6px">Joint types · ${cl.length}</h2>
+    extra += `<h2 class="rh" style="margin:16px 0 6px">Joint types · ${cl.length}</h2>
       <p class="hint" style="margin:0 0 6px">Joints with identical forces. At each, the strut push is set to 1 and the cable pulls are shown as ratios.</p>
       <table class="cut"><thead><tr><th class="n">Joints</th><th class="n">Strut</th><th>Cables</th></tr></thead><tbody>${show.map(row).join('')}</tbody></table>
       ${cl.length > show.length ? `<p class="hint">${cl.length - show.length} more joint types.</p>` : ''}`;
@@ -554,17 +745,27 @@ $('cpJson').onclick = e => copy(json(), e.currentTarget);
 
 // ---------- viewport ----------
 const cv = $('cv'), ctx = cv.getContext('2d');
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// viewport colours belong to the artboard (Ink, Paper or Clear)
+const css = n => getComputedStyle($('board')).getPropertyValue(n).trim();
 let colors = {};
 function readColors() { colors = { bg: css('--vp-bg'), strut: css('--vp-strut'), cable: css('--vp-cable'), sel: css('--vp-sel'), ten: css('--vp-tension'), com: css('--vp-compress'), text: css('--vp-text') }; }
-readColors();
+const BG_COLORS = { ink: '#141413', paper: '#f2f1ed' };
+function setBg(v) {
+  S.bg = BG_COLORS[v] || v === 'clear' ? v : 'ink';
+  $('board').dataset.bg = S.bg; document.querySelector(`input[name="bg"][value="${S.bg}"]`).checked = true;
+  readColors();
+}
+document.querySelectorAll('input[name="bg"]').forEach(r => r.addEventListener('change', () => setBg(r.value)));
+setBg('ink'); // always land on white rods on the dark artboard; Paper and Clear are per visit
 let fit = { c: [0, 0, 0], r: 1, target: 1 };
+const MAX_REPS = Math.max(...TG.SPHERE_SIZES.map(([m, n]) => Math.sqrt(m * m + m * n + n * n)));
 function fitView() {
   const P = S.result.P, c = centroid(P); let r = 0; P.forEach(p => r = Math.max(r, Math.hypot(...sub3(p, c))));
   r = r || 1;
-  // spheres: radius grows about linearly with repeats, so hold the scale of the 270-strut sphere until you pass it
+  // spheres: radius grows about linearly with repeats, so fixed scale frames every size as the largest one
+  // would be framed; all sizes then share one scale and the sphere visibly grows with each step
   const reps = S.shown.repeats;
-  const target = S.fixedScale && reps ? r * Math.max(1, 3 / reps) : r;
+  const target = S.fixedScale && reps ? r * MAX_REPS / reps : r;
   const first = !fit.seen;
   let sl = 0, sn = 0; S.model.members.forEach((m, k) => { if (m.kind === 's') { sl += S.result.lengths[k]; sn++; } });
   fit = { c, r: first || reduce.matches ? target : fit.r, target, seen: true, strut: sn ? sl / sn : 0 };
@@ -572,7 +773,10 @@ function fitView() {
 function resize() { const d = window.devicePixelRatio || 1, b = cv.getBoundingClientRect(); cv.width = Math.round(b.width * d); cv.height = Math.round(b.height * d); }
 new ResizeObserver(resize).observe(cv); resize();
 
-function animZoom() { const zp = ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
+// the build's close-up and pull-back; off with fixed scale, so the build plays at the one fixed scale
+function animZoom() { const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
+// the canvas being drawn: the viewport, or an export frame; STILL: draw without the build's camera
+let PW = 1, PH = 1, STILL = false;
 function project(p) {
   const { yaw, pitch, zoom } = S.view;
   let x = p[0] - fit.c[0], y = p[1] - fit.c[1], z = p[2] - fit.c[2];
@@ -582,10 +786,10 @@ function project(p) {
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const Y2 = cp * Y - sp * Z, Z2 = sp * Y + cp * Z;
   const zb = animZoom();
-  const W = cv.width, H = cv.height, s = Math.min(W, H) * 0.40 / fit.r * zoom * zb;
+  const W = PW, H = PH, s = Math.min(W, H) * 0.40 / fit.r * zoom * zb;
   const dist = fit.r * 4.2, persp = dist / (dist + Y2);
   let ox = 0, oy = 0;
-  const zp = ANIM.on && ANIM.plan && ANIM.plan.zoom;
+  const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom;
   if (zp && zp.focus && zp.amount > 1 && !project.inner) { // aim at the first pattern while close in
     project.inner = true; const f = project(zp.focus); project.inner = false;
     const w = (zb - 1) / (zp.amount - 1); ox = w * (f[0] - W / 2); oy = w * (f[1] - H / 2);
@@ -598,13 +802,23 @@ function mixColor(a, b, t) {
   const hex = c => { c = c.replace('#', ''); if (c.length === 3) c = c.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16)); };
   try { const A = hex(a), B = hex(b); return 'rgb(' + A.map((x, i) => Math.round(x + (B[i] - x) * t)).join(',') + ')'; } catch (e) { return a; }
 }
-function draw() {
-  const W = cv.width, H = cv.height, d = window.devicePixelRatio || 1;
-  ctx.fillStyle = colors.bg; ctx.fillRect(0, 0, W, H);
+// the finished structure with its resting give at time t (the give only moves spheres)
+const idleGives = () => ANIM.give > 0 && !reduce.matches && S.shown && S.shown.repeats;
+const idlePose = t => applyGive(S.result.P.map(p => p.slice()), t, () => GIVE_REST, GIVE_REST, null);
+// o.d: line scale (device pixels per CSS pixel); o.bg: fill the background; o.base: joint positions to draw
+// (otherwise the live build frame or resting pose); o.still: ignore the build; o.clean: no selection or hover
+function draw(c = cv, cx = ctx, o = {}) {
+  const W = c.width, H = c.height, d = o.d || window.devicePixelRatio || 1;
+  PW = W; PH = H; STILL = !!o.still;
+  const ctx = cx;
+  ctx.clearRect(0, 0, W, H);
+  const fill = o.bg !== undefined ? o.bg : (S.bg === 'clear' ? null : colors.bg);
+  if (fill) { ctx.fillStyle = fill; ctx.fillRect(0, 0, W, H); }
   if (!S.result) return;
-  const fr = ANIM.on && ANIM.plan ? animFrame(ANIM.t) : null;
-  let base = fr ? fr.P : S.result.P;
-  if (!fr && ANIM.give > 0 && !reduce.matches && S.shown && S.shown.repeats) base = applyGive(S.result.P.map(p => p.slice()), GIVE_T + IDLE_OFF, () => GIVE_REST, GIVE_REST, null);
+  const fr = !o.still && ANIM.on && ANIM.plan ? animFrame(ANIM.t) : null;
+  let base = o.base || (fr ? fr.P : S.result.P);
+  if (!o.base && !fr && idleGives()) base = idlePose(GIVE_T + IDLE_OFF);
+  const sel = o.clean ? -2 : S.sel, hov = o.clean ? -2 : hover;
   const P = base.map(project), md = S.model, v = S.verify;
   let segs = md.members.map((m, k) => ({ k, m, a: P[m.a], b: P[m.b], z: (P[m.a][2] + P[m.b][2]) / 2 }));
   if (fr) {
@@ -628,10 +842,10 @@ function draw() {
     const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d));
     let col = isS ? colors.strut : colors.cable, w = isS ? rod : 1.1;
     if (S.force) { col = isS ? colors.com : colors.ten; w = isS ? 2 + 6 * f : 0.6 + 2.8 * f; }
-    if (s.k === S.sel || s.k === hover) { col = colors.sel; }
+    if (s.k === sel || s.k === hov) { col = colors.sel; }
     if (!isS && v.q[s.k] <= 1e-9) { ctx.setLineDash([4 * d, 4 * d]); } else ctx.setLineDash([]);
     const fa = fr ? fr.alpha[s.k] : 1;
-    ctx.globalAlpha = (s.k === S.sel ? 1 : alpha) * fa;
+    ctx.globalAlpha = (s.k === sel ? 1 : alpha) * fa;
     if (!isS && S.cable > 1 && !S.force && col === colors.cable) col = mixColor(colors.cable, colors.strut, Math.min(1, S.cable - 1));
     ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : (fr ? fr.cw[s.k] : 1));
     ctx.beginPath();
@@ -676,6 +890,7 @@ function draw() {
 function pick(mx, my) {
   if (!S.result) return -1;
   const d = window.devicePixelRatio || 1, x = mx * d, y = my * d;
+  PW = cv.width; PH = cv.height; STILL = false;
   const P = S.result.P.map(project);
   let best = -1, bd = 10 * d, bz = Infinity;
   S.model.members.forEach((m, k) => {
@@ -688,7 +903,7 @@ function pick(mx, my) {
   return best;
 }
 let drag = null;
-cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { if (exporting) return; drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => {
   const b = cv.getBoundingClientRect();
   if (drag) {
@@ -703,13 +918,13 @@ cv.addEventListener('pointerup', e => {
   drag = null;
 });
 cv.addEventListener('pointerleave', () => { hover = -1; });
-cv.addEventListener('wheel', e => { e.preventDefault(); S.view.zoom = Math.max(0.3, Math.min(5, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
+cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S.view.zoom = Math.max(0.3, Math.min(5, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
 
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
-function toggle(id, key, after) { const b = $(id); b.setAttribute('aria-pressed', S[key]); b.onclick = () => { S[key] = !S[key]; b.setAttribute('aria-pressed', S[key]); after && after(); }; }
+function toggle(id, key, after) { const b = $(id); b.checked = S[key]; b.addEventListener('change', () => { S[key] = b.checked; after && after(); }); }
 toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes');
-$('bReset').onclick = () => { S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
+$('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
 function legend() {
   $('legend').innerHTML = S.force
     ? `<span><i style="background:var(--vp-compress)"></i>compression</span><span><i style="background:var(--vp-tension);height:2px"></i>tension (width = force)</span>`
@@ -720,6 +935,9 @@ legend();
 // One repeat unit goes in strut by strut. It is then swung 72 degrees round the nearest five-fold axis
 // four times (a flower of 5), and the flower is swung out to the other 11 five-fold axes: 60 copies.
 const ANIM = { on: false, playing: false, t: 0, plan: null, autoDone: false, speed: 1, give: 1 };
+let exporting = null, buildEnd = null; // the running GIF/MP4 job (the view holds still meanwhile); the build's length, cached
+const MP4_FPS = 30;
+const gifFps = () => 100 / S.gifCs; // GIF delays are whole hundredths of a second: S.gifCs per frame
 { const v = parseFloat(store.get('tw.give2')); if (v >= 0 && v <= 3) ANIM.give = v; }
 { const v = parseFloat(store.get('tw.speed')); if (v >= 0.25 && v <= 8) ANIM.speed = v; }
 const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
@@ -950,28 +1168,33 @@ function animFrame(t) {
   if (pl.ghostAt !== undefined && pl.ghostAt !== null) ghost = 0.07 * clamp01((t - pl.ghostAt) / 1.5);
   return { P: out, alpha, glow, curve, ghost, stroke, marks, cw };
 }
+const ICON = { play: '<svg viewBox="0 0 12 12"><path d="M3 1.5 L10.5 6 L3 10.5 Z"/></svg>', pause: '<svg viewBox="0 0 12 12"><rect x="2.5" y="1.5" width="2.6" height="9" rx=".5"/><rect x="6.9" y="1.5" width="2.6" height="9" rx=".5"/></svg>' };
 function animCaption() {
   const pl = ANIM.plan; let c = pl.caps[0];
   pl.caps.forEach(x => { if (ANIM.t >= x.t) c = x; });
   $('aCap').innerHTML = `${esc(c.text)}<small>${esc(c.sub)}</small>`;
   $('aScrub').value = Math.round(1000 * ANIM.t / pl.end);
-  $('aPlay').textContent = ANIM.playing ? 'Pause' : 'Play';
+  const pl2 = ANIM.playing ? 'pause' : 'play';
+  if ($('aPlay').dataset.s !== pl2) { $('aPlay').dataset.s = pl2; $('aPlay').innerHTML = ICON[pl2]; $('aPlay').setAttribute('aria-label', ANIM.playing ? 'Pause' : 'Play'); }
 }
-function startBuild() {
-  if (!S.result) return;
-  ANIM.plan = makePlan(); ANIM.on = true; ANIM.playing = true; ANIM.t = 0;
+function beginBuild() { // the build's state only, no UI (the build clip export uses this too)
+  ANIM.plan = makePlan(); ANIM.on = true; ANIM.playing = true; ANIM.t = 0; ANIM.endClock = undefined;
   // turn the camera so the starting five-fold axis faces the viewer
   const f = ANIM.plan.face;
   if (f) { const r = Math.hypot(f[0], f[1]); ANIM.viewFrom = { yaw: S.view.yaw, pitch: S.view.pitch }; ANIM.viewTo = { yaw: Math.atan2(-f[0], -f[1]), pitch: Math.atan2(f[2], r) }; ANIM.viewT = 0; }
   else ANIM.viewTo = null;
-  $('anim').hidden = false; $('legend').hidden = true; $('bBuild').setAttribute('aria-pressed', 'true');
+}
+function startBuild() {
+  if (!S.result) return;
+  beginBuild();
+  $('anim').hidden = false; $('legend').hidden = true; $('bBuild').setAttribute('aria-pressed', 'true'); $('bBuild').textContent = 'Close the build';
   S.sel = -1; hover = -1; renderSel(); animCaption();
 }
 function stopBuild() {
   // carry on from the build's own give clock, so closing a finished build does not jump
   if (ANIM.plan && ANIM.t >= ANIM.plan.end && ANIM.endClock !== undefined) IDLE_OFF = ANIM.plan.end - ANIM.endClock;
   ANIM.on = false; ANIM.playing = false; ANIM.plan = null;
-  $('anim').hidden = true; $('legend').hidden = false; $('bBuild').setAttribute('aria-pressed', 'false');
+  $('anim').hidden = true; $('legend').hidden = false; $('bBuild').setAttribute('aria-pressed', 'false'); $('bBuild').textContent = 'Watch it build';
 }
 $('bBuild').onclick = () => ANIM.on ? stopBuild() : startBuild();
 $('aClose').onclick = stopBuild;
@@ -985,11 +1208,11 @@ function setSpeed(v, fromSlider) {
   ANIM.speed = v; store.set('tw.speed', String(v));
   $('aSpeedVal').textContent = (v < 1 ? v.toFixed(2).replace(/0$/, '') : v % 1 ? v.toFixed(1) : String(v)) + '\u00d7';
   if (!fromSlider) $('aSpeed').value = Math.round(speedToSlider(v));
+  syncClip();
 }
 $('aSpeed').addEventListener('input', e => setSpeed(sliderToSpeed(+e.target.value), true));
-function setGive(v) { ANIM.give = v; store.set('tw.give2', String(v)); const txt = v.toFixed(1).replace(/\.0$/, '') + '\u00d7'; $('aGive').value = $('give2').value = Math.round(v * 100); $('aGiveVal').textContent = $('gvVal2').textContent = txt; }
+function setGive(v) { ANIM.give = v; store.set('tw.give2', String(v)); $('give2').value = Math.round(v * 100); $('gvVal2').textContent = v.toFixed(1).replace(/\.0$/, '') + '\u00d7'; syncClip(); }
 $('give2').addEventListener('input', e => setGive(+e.target.value / 100));
-$('aGive').addEventListener('input', e => setGive(+e.target.value / 100));
 setGive(ANIM.give);
 setSpeed(ANIM.speed);
 $('aPlay').onclick = () => {
@@ -1003,6 +1226,223 @@ $('aPlay').onclick = () => {
 $('aScrub').addEventListener('input', e => { if (!ANIM.plan) return; ANIM.playing = false; ANIM.t = ANIM.plan.end * e.target.value / 1000; animCaption(); });
 
 if (location.hash === '#noworker') window.__twDraw = () => { if (ANIM.plan) animCaption(); draw(); }; // test hook
+
+// ---------- image and motion export (PNG, GIF, MP4) ----------
+// Frames are square and drawn off screen with the same draw() as the view, scaled so lines read as they
+// do in a 700 px view. A turn is one full revolution; its give is blended against the same give one turn
+// earlier, so the last frame leads straight back into the first. A build clip runs the build from the
+// first stroke, stepping the same clocks as the live view, then holds the finished structure for a moment.
+const toast = msg => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); };
+async function offer(filename, blob) {
+  if (window.claude && typeof window.claude.use === 'function') {
+    const dl = await window.claude.use('downloads');
+    if (!dl) { toast('Saving files isn’t available in this view.'); return; }
+    try { await dl.save({ filename, data: blob }); toast(`Saved ${filename}`); }
+    catch (e) {
+      if (e && e.code === 'declined') return;
+      toast(e && e.code === 'rate_limited' ? 'A save prompt is already open.' : `Couldn’t save ${filename}.`);
+    }
+    return;
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast(`Saved ${filename}`);
+}
+const baseName = () => 'tensegrity_' + ((S.shown && S.shown.name) || 'structure').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const hexRgb = h => { const n = parseInt(h.replace('#', ''), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+// background for formats that need one: the artboard, or for Clear whichever suits the strut colour
+const solidBg = () => S.bg !== 'clear' ? BG_COLORS[S.bg] : (luma(hexRgb(colors.strut)) > 128 ? BG_COLORS.ink : BG_COLORS.paper);
+const exportFill = () => S.exportBg && S.bg !== 'clear' ? BG_COLORS[S.bg] : null;
+const exportScale = size => size / 700;
+
+$('exPng').addEventListener('click', () => {
+  if (!S.result || exporting) return;
+  const size = +$('pngSize').value, c = document.createElement('canvas'); c.width = c.height = size;
+  try { draw(c, c.getContext('2d'), { d: exportScale(size), bg: exportFill(), clean: true }); }
+  catch (e) { console.error(e); toast('Couldn’t render the PNG.'); return; }
+  c.toBlob(b => b ? offer(`${baseName()}_${size}.png`, b) : toast('Couldn’t render the PNG.'), 'image/png');
+});
+
+const BUILD_TAIL = 1.5; // seconds of the finished structure at the end of a build clip
+function clipPlan(kind, fps) {
+  if (!S.result) return null;
+  if (kind === 'turn') { const T = S.turnSecs; return { kind, T, n: Math.max(2, Math.round(T * fps)) }; }
+  if (buildEnd === null) { try { buildEnd = makePlan().end; } catch (e) { return null; } }
+  const T = buildEnd / ANIM.speed + BUILD_TAIL;
+  return { kind, T, n: Math.ceil(T * fps) };
+}
+function syncClip() {
+  if (!$('clipInfo')) return;
+  const busy = !!exporting;
+  document.querySelector(`input[name="clip"][value="${S.clip}"]`).checked = true;
+  $('turnSecs').value = S.turnSecs; $('turnVal').textContent = `${S.turnSecs} s per turn`;
+  $('spinNote').textContent = `one turn every ${S.turnSecs} s, as exported`;
+  $('exportBg').checked = S.exportBg;
+  const p = clipPlan(S.clip, MP4_FPS);
+  $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360° · ${p.T} s` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
+  $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
+  $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
+  $('gifRate').value = String(S.gifCs);
+  $('exPng').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
+}
+document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener('change', () => { S.clip = r.value; store.set('tw.clip', S.clip); syncClip(); }));
+$('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });
+$('exportBg').addEventListener('change', e => { S.exportBg = e.target.checked; store.set('tw.exportBg', S.exportBg ? '1' : '0'); });
+{ const t = parseInt(store.get('tw.turn')); if (t >= 4 && t <= 40) S.turnSecs = t; }
+S.clip = store.get('tw.clip') === 'build' ? 'build' : 'turn';
+S.exportBg = store.get('tw.exportBg') !== '0';
+$('gifRate').addEventListener('change', e => { S.gifCs = +e.target.value; store.set('tw.gifCs', String(S.gifCs)); });
+{ const g = parseInt(store.get('tw.gifCs')); if ([2, 3, 4, 5, 6, 8, 10].includes(g)) S.gifCs = g; }
+
+const libs = {};
+const loadGif = () => libs.gif ||= import('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js')
+  .catch(e => { libs.gif = null; throw new Error('load'); });
+const loadMp4 = () => libs.mp4 ||= new Promise((res, rej) => {
+  if (window.Mp4Muxer) return res(window.Mp4Muxer);
+  const sc = document.createElement('script');
+  sc.src = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js';
+  sc.onload = () => window.Mp4Muxer ? res(window.Mp4Muxer) : rej(new Error('load'));
+  sc.onerror = () => { libs.mp4 = null; sc.remove(); rej(new Error('load')); };
+  document.head.append(sc);
+});
+const nextTick = () => new Promise(r => setTimeout(r, 0));
+
+function setProgress(u, label) {
+  $('progress').hidden = u == null;
+  $('progressBar').style.width = `${Math.round((u || 0) * 100)}%`;
+  if (label != null) (exporting.kind === 'gif' ? $('exGif') : $('exMp4')).textContent = label;
+}
+
+// the frame source for a plan: frame(i) sets up frame i and returns the draw options for it
+function framer(plan, fps, size) {
+  const d = exportScale(size);
+  if (plan.kind === 'turn') {
+    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives();
+    return i => {
+      const u = i / plan.n;
+      S.view.yaw = yaw0 + 2 * Math.PI * u;
+      let base;
+      if (gives) { // blend with the pose one turn earlier: at u = 1 this is exactly frame 0 again
+        const A = idlePose(t0 + u * plan.T), B = idlePose(t0 + u * plan.T - plan.T);
+        base = A.map((p, k) => [0, 1, 2].map(j => p[j] * (1 - u) + B[k][j] * u));
+      }
+      return { d, still: true, clean: true, base };
+    };
+  }
+  beginBuild();
+  return i => { if (i > 0) step(1 / fps, false); return { d, clean: true }; };
+}
+
+async function runExport(kind) {
+  if (exporting) { if (exporting.kind === kind) exporting.cancel = true; return; }
+  if (!S.result) return;
+  if (kind === 'mp4' && typeof VideoEncoder === 'undefined') {
+    toast('MP4 export needs a browser with video encoding: Chrome, Edge or Safari 16.4 and later.'); return;
+  }
+  const fps = kind === 'gif' ? gifFps() : MP4_FPS, plan = clipPlan(S.clip, fps);
+  if (!plan) return;
+  const size = +$('motionSize').value;
+  // everything a clip moves, so the view comes back exactly as it was
+  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, result: S.result,
+    anim: { on: ANIM.on, playing: ANIM.playing, t: ANIM.t, plan: ANIM.plan, viewT: ANIM.viewT, viewFrom: ANIM.viewFrom, viewTo: ANIM.viewTo, endClock: ANIM.endClock } };
+  exporting = { kind, cancel: false };
+  const btn = kind === 'gif' ? $('exGif') : $('exMp4');
+  btn.classList.add('busy'); syncClip();
+  $('busy').hidden = false; $('busy').classList.add('rec'); $('busy').textContent = `Recording ${kind.toUpperCase()}`;
+  setProgress(0, 'Loading…');
+  let blob = null, failed = null;
+  try {
+    fit.r = fit.target;
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const cx = c.getContext('2d', { willReadFrequently: kind === 'gif' });
+    const lib = kind === 'gif' ? await loadGif() : await loadMp4();
+    if (!exporting.cancel) {
+      const frame = framer(plan, fps, size);
+      blob = kind === 'gif' ? await encodeGif(lib, plan, c, cx, frame, fps) : await encodeMp4(lib, plan, c, cx, frame, fps);
+    }
+  } catch (e) { failed = e; console.error(e); }
+  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF;
+  if (S.result === saved.result) Object.assign(ANIM, saved.anim);
+  else if (ANIM.on) stopBuild(); // a new solve arrived meanwhile: the old build no longer fits
+  if (ANIM.on && ANIM.plan) animCaption();
+  const cancelled = exporting.cancel;
+  btn.classList.remove('busy'); btn.textContent = kind === 'gif' ? 'GIF' : 'MP4';
+  $('busy').hidden = true; $('busy').classList.remove('rec');
+  exporting = null; setProgress(null); syncClip();
+  if (failed) {
+    toast(failed.message === 'load'
+      ? `Couldn’t load the ${kind.toUpperCase()} encoder. Check your connection and try again.`
+      : `Couldn’t encode the ${kind.toUpperCase()}: ${failed.message || 'unknown error'}.`);
+    return;
+  }
+  if (cancelled || !blob) { toast('Export cancelled.'); return; }
+  offer(`${baseName()}_${plan.kind}_${size}.${kind}`, blob);
+}
+
+async function encodeGif(lib, plan, c, cx, frame, fps) {
+  const { GIFEncoder, quantize, applyPalette } = lib;
+  const W = c.width, H = c.height, npx = W * H, delay = S.gifCs * 10;
+  const fill = exportFill(), transparent = !fill, matte = fill || solidBg(), mrgb = hexRgb(matte);
+  const gif = GIFEncoder(), alpha = new Uint8Array(npx);
+  for (let i = 0; i < plan.n; i++) {
+    if (exporting.cancel) return null;
+    const o = frame(i);
+    draw(c, cx, { ...o, bg: transparent ? null : fill });
+    if (transparent) { // keep the coverage, then lay the matte under so soft edges blend toward it
+      const a = cx.getImageData(0, 0, W, H).data;
+      for (let p = 0, q = 3; p < npx; p++, q += 4) alpha[p] = a[q];
+      cx.globalCompositeOperation = 'destination-over'; cx.fillStyle = matte; cx.fillRect(0, 0, W, H); cx.globalCompositeOperation = 'source-over';
+    }
+    const rgba = cx.getImageData(0, 0, W, H).data;
+    const palette = quantize(rgba, transparent ? 255 : 256, { format: 'rgb565' });
+    const idx = applyPalette(rgba, palette, 'rgb565');
+    let ti = 0;
+    if (transparent) { palette.push(mrgb); ti = palette.length - 1; for (let p = 0; p < npx; p++) if (alpha[p] < 50) idx[p] = ti; }
+    gif.writeFrame(idx, W, H, { palette, delay, repeat: 0, transparent, transparentIndex: ti, dispose: transparent ? 2 : 1 });
+    setProgress((i + 1) / plan.n, `${Math.round((i + 1) / plan.n * 100)}% · cancel`);
+    if (i % 2 === 1) await nextTick();
+  }
+  gif.finish();
+  return new Blob([gif.bytes()], { type: 'image/gif' });
+}
+
+async function encodeMp4(Mp4Muxer, plan, c, cx, frame, fps) {
+  const W = c.width, H = c.height, bitrate = Math.round(W * H * fps * 0.3);
+  let config = null;
+  for (const codec of ['avc1.640033', 'avc1.4d0033', 'avc1.42003e']) {
+    const cand = { codec, width: W, height: H, bitrate, framerate: fps, avc: { format: 'avc' } };
+    try { if ((await VideoEncoder.isConfigSupported(cand)).supported) { config = cand; break; } } catch (e) {}
+  }
+  if (!config) throw new Error(`this browser can’t encode H.264 video at ${W}×${H}`);
+  const muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(),
+    video: { codec: 'avc', width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
+  let encErr = null;
+  const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { encErr = e; } });
+  enc.configure(config);
+  const bg = solidBg(), us = 1e6 / fps; // video has no alpha: always a background
+  for (let i = 0; i < plan.n; i++) {
+    if (exporting.cancel) { try { enc.close(); } catch (e) {} return null; }
+    if (encErr) throw encErr;
+    draw(c, cx, { ...frame(i), bg });
+    const vf = new VideoFrame(c, { timestamp: Math.round(i * us), duration: Math.round(us) });
+    enc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+    vf.close();
+    while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 4));
+    setProgress((i + 1) / plan.n * 0.97, `${Math.round((i + 1) / plan.n * 97)}% · cancel`);
+    if (i % 3 === 2) await nextTick();
+  }
+  await enc.flush();
+  if (encErr) throw encErr;
+  enc.close();
+  muxer.finalize();
+  setProgress(1);
+  return new Blob([muxer.target.buffer], { type: 'video/mp4' });
+}
+$('exGif').addEventListener('click', () => runExport('gif'));
+$('exMp4').addEventListener('click', () => runExport('mp4'));
+syncClip();
 // ---------- panels ----------
 function setDetails(open) {
   $('report').hidden = !open; $('bDetails').textContent = open ? 'Hide details' : 'Show details'; $('bDetails').setAttribute('aria-expanded', String(open));
@@ -1024,34 +1464,37 @@ function setShade(v) { S.shade = v; $('shade').value = Math.round(v * 100); $('s
 function setCable(v) { S.cable = v; $('cable').value = Math.round(v * 100); $('cbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.cable', String(v)); }
 $('shade').addEventListener('input', e => setShade(+e.target.value / 100));
 $('cable').addEventListener('input', e => setCable(+e.target.value / 100));
-$('bDisplay').onclick = () => { const open = $('dpanel').hidden; $('dpanel').hidden = !open; $('bDisplay').setAttribute('aria-pressed', String(open)); $('bDisplay').setAttribute('aria-expanded', String(open)); };
 { const a = parseFloat(store.get('tw.shade')), b = parseFloat(store.get('tw.cable')); setShade(a >= 0 && a <= 1.5 ? a : 1); setCable(b >= 0.2 && b <= 2 ? b : 1); }
 
 let last = performance.now();
 function frame(t) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (exporting) return; // an export is stepping the same clocks; the view holds still meanwhile
+  step(dt, true);
+  try { draw(); } catch (e) { /* skip this frame */ }
+}
+// advance the camera, the build and the give by dt seconds (ui: update the build caption and scrubber)
+function step(dt, ui) {
   const holding = ANIM.on && ANIM.plan && ANIM.t < ANIM.plan.holdUntil;
   if (ANIM.on && ANIM.viewTo && ANIM.viewT < 1 && !drag) {
     ANIM.viewT = Math.min(1, ANIM.viewT + dt * ANIM.speed / 0.9);
     const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
     let dy = ((b.yaw - a.yaw) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
     S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
-  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 0.18);
+  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
   GIVE_T += dt;
-  if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } animCaption(); }
-  try { draw(); } catch (e) { /* skip this frame */ }
+  if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }
 }
 requestAnimationFrame(frame);
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 
 // ---------- controls ----------
 function setFamily(f, n) {
   S.family = f; if (n) S.n = n;
   $('family').value = f; $('n').value = S.n; $('k').value = S.k;
   $('nwrap').hidden = f !== 'prism' && f !== 'tower'; $('kwrap').hidden = f !== 'tower';
-  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('bScale').hidden = f !== 'sphere';
+  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('scaleWrap').hidden = f !== 'sphere';
   build(); renderGroups(); solveSoon(0);
   store.set('tw.family', f); store.set('tw.n', String(S.n)); store.set('tw.k', String(S.k)); store.set('tw.size', String(S.f)); store.set('tw.pat', S.pat);
 }
@@ -1084,7 +1527,7 @@ $('pTetraC').onclick = () => tetraPreset(20, 30);
 runJob({ bench: true }, data => {
   const rows = data.bench || [];
   $('bench').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r[0])}</td><td class="n">${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join('')
-    + `<tr><td colspan="3" class="hint" style="font-family:var(--body)">* Pars' closed form, maximised numerically over φ. Dissimilar value from his worked example (cm).</td></tr>` : '<tr><td colspan="3">Benchmarks need Web Workers.</td></tr>';
+    + `<tr><td colspan="3" class="hint">* Pars' closed form, maximised numerically over φ. Dissimilar value from his worked example (cm).</td></tr>` : '<tr><td colspan="3">Benchmarks need Web Workers.</td></tr>';
 });
 
 // start on the Pars dissimilar example so the first view shows the method
