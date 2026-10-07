@@ -485,7 +485,7 @@ self.onmessage = e => {
   if (bench) { self.postMessage({ id, bench: runBench() }); return; }
   if (tight) { try { const o = TG.tighten(model); self.postMessage({ id, tight: o && { lens: o.members.map(m => m.len), changed: o.changed } }); } catch (err) { self.postMessage({ id, tight: null }); } return; }
   try {
-    const { r, v } = TG.solveModel(model);
+    const { r, v } = TG.solveModel(model, { timeLimit: 15000 });
     self.postMessage({ id, r, v });
   } catch (err) { self.postMessage({ id, error: String(err && err.message || err) }); }
 };
@@ -507,31 +507,43 @@ function runBench() {
     out.push(['Expanded octahedron, strut / cable', Math.sqrt(8 / 3).toFixed(5), r.lengths[k].toFixed(5)]); }
   return out;
 }`;
-let worker = null, jobId = 0, latest = 0;
-if (location.hash !== '#noworker') { // #noworker: run inline (used by the headless smoke test)
-  try { worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }))); } catch (e) { worker = null; }
+let worker = null, benchWorker = null, jobId = 0, latest = 0, inFlight = null;
+window.__twJobs = () => ({ inFlight: inFlight && inFlight.id, latest, jobId, worker: !!worker }); // debugging aid
+const workerUrl = (() => { try { return URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' })); } catch (e) { return null; } })();
+const makeWorker = () => { try { return workerUrl ? new Worker(workerUrl) : null; } catch (e) { return null; } };
+if (location.hash !== '#noworker') { worker = makeWorker(); benchWorker = makeWorker(); } // #noworker: run inline (headless smoke test)
+// A new solve replaces any solve still running: the worker is stopped and a fresh one started, so
+// stale jobs never pile up behind the one you want (that queue is what made towers look stuck).
+function cancelInFlight() {
+  if (!worker || !inFlight) return;
+  worker.terminate(); worker = makeWorker();
+  const was = inFlight; inFlight = null;
+  if (was.onCancel) was.onCancel();
 }
-function runJob(msg, cb) {
+function runJob(msg, cb, opts = {}) {
   const id = ++jobId;
-  if (!worker) { // fallback: run inline
+  if (!opts.bench) cancelInFlight(); // first: this may replace the worker
+  const w = opts.bench ? benchWorker : worker;
+  if (!w) { // fallback: run inline
     setTimeout(() => {
       if (msg.bench) { cb({ bench: [] }); return; }
       if (msg.tight) { const o = TG.tighten(msg.model); cb({ tight: o && { lens: o.members.map(m => m.len), changed: o.changed } }); return; }
-      try { cb(TG.solveModel(msg.model)); }
+      try { cb(TG.solveModel(msg.model, { timeLimit: 15000 })); }
       catch (err) { cb({ error: String(err && err.message || err) }); }
     }, 0);
     return id;
   }
-  const h = e => { if (e.data.id !== id) return; worker.removeEventListener('message', h); cb(e.data); };
-  worker.addEventListener('message', h);
-  worker.postMessage({ ...msg, id });
+  const h = e => { if (e.data.id !== id) return; w.removeEventListener('message', h); if (!opts.bench && inFlight && inFlight.id === id) inFlight = null; cb(e.data); };
+  w.addEventListener('message', h);
+  if (!opts.bench) inFlight = { id, onCancel: opts.onCancel };
+  w.postMessage({ ...msg, id });
   return id;
 }
 
 // ---------- state ----------
 const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
-  struct: null, over: {}, sel: -1,
+  struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
   view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
@@ -554,8 +566,17 @@ function build() {
   for (const g of Object.values(s.groups)) if (g.kind === 'c') g.len = +(g.len * BASE).toFixed(3);
   if (S.chir < 0) s.P = s.P.map(p => [-p[0], p[1], p[2]]);
   if (S.family === 'sphere') { const [m, n] = TG.SPHERE_SIZES[S.f]; s.repeats = Math.sqrt(m * m + m * n + n * n); }
+  // keep the member lengths you set for this family (groups you edited); the rest take this size's defaults
+  const memKey = S.family === 'sphere' ? 'sphere-' + S.pat : S.family, mem = S.groupMem[memKey];
+  if (mem) for (const [id, g] of Object.entries(s.groups)) if (mem[id] && mem[id].touched) { g.touched = true; if (g.kind === 'c' && mem[id].len > 0) g.len = mem[id].len; if (g.kind === 's' && mem[id].ratio > 0) g.ratio = mem[id].ratio; }
+  S.groupMem[memKey] = s.groups; // same objects: later edits are remembered too
   S.struct = s; S.over = {}; S.sel = -1;
 }
+function saveGroupMem() {
+  const out = {}; for (const [k, gs] of Object.entries(S.groupMem)) { out[k] = {}; for (const [id, g] of Object.entries(gs)) if (g.touched) out[k][id] = { len: g.len, ratio: g.ratio, touched: true }; }
+  store.set('tw.lengths', JSON.stringify(out));
+}
+try { const v = JSON.parse(store.get('tw.lengths') || '{}'); if (v && typeof v === 'object') S.groupMem = v; } catch (e) {}
 function model() {
   const s = S.struct;
   return { P: s.P, members: s.members.map((m, i) => { const g = s.groups[m.group], o = S.over[i] || {}; return { a: m.a, b: m.b, kind: m.kind, group: m.group, len: o.len ?? g.len, mode: o.mode ?? g.mode, ratio: o.ratio ?? g.ratio }; }) };
@@ -574,9 +595,11 @@ function solve() {
       $('busy').textContent = 'Could not solve these lengths. Showing the last good result.';
       return;
     }
-    $('busy').hidden = true;
+    $('busy').hidden = !r.timedOut;
+    if (r.timedOut) $('busy').textContent = 'Stopped after 15 s: these lengths do not settle. Showing where it got to.';
     if (exporting) exporting.cancel = true;
     S.model = md; S.shown = st; S.result = r; S.verify = data.v; buildEnd = null;
+    saveGroupMem();
     if (S.sel >= md.members.length) S.sel = -1;
     if (ANIM.on) stopBuild();
     fitView(); renderReport(); renderSel(); syncClip();
@@ -597,7 +620,7 @@ function renderGroups() {
     tb.appendChild(tr);
     const inp = tr.querySelector('input');
     if (g.kind === 's') inp.title = 'Relative length of growing struts';
-    inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v > 0)) return; if (g.kind === 'c') g.len = v; else g.ratio = v; solveSoon(); });
+    inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v > 0)) return; if (g.kind === 'c') g.len = v; else g.ratio = v; g.touched = true; saveGroupMem(); solveSoon(); });
   }
   const tr = document.createElement('tr');
   tr.innerHTML = `<td colspan="2" class="hint" style="padding-top:2px">Cable values in ${esc(S.units)}. Strut value is a ratio (grow).</td>`;
@@ -717,7 +740,7 @@ $('bTight').onclick = () => {
     if (st !== S.struct) return;
     data.tight.changed.forEach(k => { S.over[k] = { ...(S.over[k] || {}), len: data.tight.lens[k] }; });
     solveSoon(0);
-  });
+  }, { onCancel: () => { $('bTight').disabled = false; $('tightNote').textContent = 'Stopped: a new solve started.'; } });;
 };
 
 // ---------- exports ----------
@@ -1502,24 +1525,22 @@ $('family').addEventListener('change', e => setFamily(e.target.value));
 $('n').addEventListener('change', e => { const v = Math.max(3, Math.min(12, parseInt(e.target.value) || 3)); setFamily(S.family, v); });
 // repeats: Goldberg-Coxeter sizes, each one a finer repeat of the same icosahedral pattern
 $('f').innerHTML = TG.SPHERE_SIZES.map(([m, n], i) => { const T = m * m + m * n + n * n; return `<option value="${i}">${i + 1} · ${30 * T} struts</option>`; }).join('');
-$('f').addEventListener('change', e => { S.f = Math.max(0, Math.min(TG.SPHERE_SIZES.length - 1, parseInt(e.target.value) || 0)); keepLengths(() => setFamily('sphere')); });
+$('f').addEventListener('change', e => { S.f = Math.max(0, Math.min(TG.SPHERE_SIZES.length - 1, parseInt(e.target.value) || 0)); setFamily('sphere'); });
 $('pat').addEventListener('change', e => { S.pat = e.target.value; setFamily('sphere'); });
-// changing the repeat count keeps the cable lengths you set, so the same web just grows
-function keepLengths(fn) { const g = S.struct && S.struct.groups; fn(); if (g && S.struct.groups.ring && g.ring) { for (const k of ['ring', 'cross', 'strut']) Object.assign(S.struct.groups[k], { len: g[k].len, ratio: g[k].ratio }); renderGroups(); solveSoon(0); } }
 $('k').addEventListener('change', e => { S.k = Math.max(2, Math.min(10, parseInt(e.target.value) || 4)); setFamily('tower'); });
-function setChir(c) { S.chir = c; $('chirR').setAttribute('aria-pressed', c > 0); $('chirL').setAttribute('aria-pressed', c < 0); const keep = { g: JSON.stringify(S.struct.groups), o: S.over }; build(); S.struct.groups = JSON.parse(keep.g); S.over = keep.o; renderGroups(); solveSoon(0); }
+function setChir(c) { S.chir = c; $('chirR').setAttribute('aria-pressed', c > 0); $('chirL').setAttribute('aria-pressed', c < 0); const o = S.over; build(); S.over = o; renderGroups(); solveSoon(0); }
 $('chirR').onclick = () => setChir(1); $('chirL').onclick = () => setChir(-1);
 $('units').addEventListener('input', e => { S.units = e.target.value.slice(0, 8) || 'cm'; renderGroups(); if (S.result) { renderReport(); renderSel(); } });
 $('dia').addEventListener('input', e => { const v = parseFloat(e.target.value); if (v >= 0) { S.dia = v; if (S.result) renderReport(); } });
 
 $('pDiss').onclick = () => {
   setFamily('prism', 3);
-  ['bot', 'top', 'side'].forEach(g => S.struct.groups[g].len = 20.44);
+  ['bot', 'top', 'side'].forEach(g => { S.struct.groups[g].len = 20.44; S.struct.groups[g].touched = true; }); saveGroupMem();
   const st = S.struct.members.map((m, i) => m.kind === 's' ? i : -1).filter(i => i >= 0);
   S.over[st[0]] = { mode: 'fixed', len: 26 }; S.over[st[1]] = { mode: 'fixed', len: 26 };
   S.sel = st[2]; renderGroups(); solveSoon(0);
 };
-function tetraPreset(b, c) { setFamily('tetra'); S.struct.groups.ring.len = b; S.struct.groups.cross.len = c; renderGroups(); solveSoon(0); }
+function tetraPreset(b, c) { setFamily('tetra'); Object.assign(S.struct.groups.ring, { len: b, touched: true }); Object.assign(S.struct.groups.cross, { len: c, touched: true }); saveGroupMem(); renderGroups(); solveSoon(0); }
 $('pTetra').onclick = () => tetraPreset(20, 20);
 $('pTetraC').onclick = () => tetraPreset(20, 30);
 
@@ -1528,7 +1549,7 @@ runJob({ bench: true }, data => {
   const rows = data.bench || [];
   $('bench').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r[0])}</td><td class="n">${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join('')
     + `<tr><td colspan="3" class="hint">* Pars' closed form, maximised numerically over φ. Dissimilar value from his worked example (cm).</td></tr>` : '<tr><td colspan="3">Benchmarks need Web Workers.</td></tr>';
-});
+}, { bench: true });
 
 // start on the Pars dissimilar example so the first view shows the method
 const f0 = store.get('tw.family');

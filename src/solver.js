@@ -353,28 +353,80 @@ function formFind(model, opts = {}) {
     return Q;
   }
 
+  // Big structures without the icosahedral symmetry (towers): solve each Newton step with a banded
+  // Cholesky factorization instead of a dense one. Joints are reordered (reverse Cuthill-McKee) so the
+  // stiffness matrix is a narrow band, and 6 coordinates are pinned to remove rigid motion. Dense cost
+  // grows with joints^3, banded with joints * band^2.
+  const useBand = opts.band !== undefined ? opts.band : N > 36;
+  let bandInfo = null;
+  if (useBand) {
+    const adj = model.P.map(() => []); mem.forEach(e => { adj[e.a].push(e.b); adj[e.b].push(e.a); });
+    const ord = rcmOrder(N, adj), pos = new Int32Array(N); ord.forEach((v, i) => pos[v] = i);
+    const Pn = []; for (let i = 0; i < N; i++) Pn.push([X[3 * i], X[3 * i + 1], X[3 * i + 2]]);
+    const pin = pinNodes(Pn), fixed = new Set();
+    for (let d = 0; d < 3; d++) fixed.add(3 * pin.p0 + d);
+    const ax = [0, 1, 2].sort((x, y) => Math.abs(pin.d01[x]) - Math.abs(pin.d01[y]));
+    fixed.add(3 * pin.p1 + ax[0]); fixed.add(3 * pin.p1 + ax[1]);
+    const an = [0, 1, 2].sort((x, y) => Math.abs(pin.nrm[y]) - Math.abs(pin.nrm[x]));
+    fixed.add(3 * pin.p2 + an[0]);
+    const freeOf = new Int32Array(3 * N).fill(-1), fullOf = [];
+    const byPos = []; for (let i = 0; i < N; i++) for (let d = 0; d < 3; d++) byPos.push([3 * pos[i] + d, 3 * i + d]);
+    byPos.sort((x, y) => x[0] - y[0]);
+    for (const [, full] of byPos) if (!fixed.has(full)) { freeOf[full] = fullOf.length; fullOf.push(full); }
+    let b = 0; mem.forEach(e => { for (let p = 0; p < 3; p++) for (let q = 0; q < 3; q++) { const i = freeOf[3 * e.a + p], j = freeOf[3 * e.b + q]; if (i >= 0 && j >= 0) b = Math.max(b, Math.abs(i - j)); } });
+    for (let i = 0; i < N; i++) for (let p = 0; p < 3; p++) for (let q = 0; q < 3; q++) { const x = freeOf[3 * i + p], y = freeOf[3 * i + q]; if (x >= 0 && y >= 0) b = Math.max(b, Math.abs(x - y)); }
+    bandInfo = { freeOf, fullOf, nf: fullOf.length, b };
+  }
+  // one damped Newton step on the banded path; the growth scale lambda is the last unknown, handled
+  // by a Schur complement so the band stays narrow
+  function bandStep(H, g, mu, dmean) {
+    const { fullOf, nf, b } = bandInfo, w = b + 1, L = new Float64Array(nf * w);
+    for (let i = 0; i < nf; i++) { const fi = fullOf[i]; for (let j = Math.max(0, i - b); j <= i; j++) L[i * w + (j - i + b)] = H[fi * n + fullOf[j]]; L[i * w + b] += mu * dmean; }
+    if (!bandFactor(L, nf, b)) return null;
+    const rhs = new Float64Array(nf), hv = new Float64Array(nf);
+    for (let i = 0; i < nf; i++) { rhs[i] = -g[fullOf[i]]; hv[i] = H[fullOf[i] * n + n - 1]; }
+    const y1 = bandSolve(L, nf, b, rhs), y2 = bandSolve(L, nf, b, hv);
+    let dl = 0;
+    const hll = H[(n - 1) * n + n - 1] + mu * dmean;
+    let sc = hll; for (let i = 0; i < nf; i++) sc -= hv[i] * y2[i];
+    if (grow.length) {
+      if (!(sc > 0)) return null;
+      let num = -g[n - 1]; for (let i = 0; i < nf; i++) num -= hv[i] * y1[i];
+      dl = num / sc;
+    }
+    const dx = new Float64Array(n);
+    for (let i = 0; i < nf; i++) dx[fullOf[i]] = y1[i] - y2[i] * dl;
+    dx[n - 1] = dl;
+    return dx;
+  }
   // continuation on the push F: larger push first (well conditioned), then shrink toward the exact limit
   const Ms = Math.max(1, grow.length);
   const eps = opts.eps || [1e-2, 1e-3, 1e-4, 1e-5, 1e-6];
   let Y = new Float64Array(n); Y.set(X); Y[n - 1] = lam;
-  let iters = 0, ok = true, runaway = false;
+  let iters = 0, ok = true, runaway = false, factors = 0, timedOut = false;
+  const t0 = Date.now(), limit = opts.timeLimit || Infinity;
   for (const ep of eps) {
     const F = grow.length ? ep * Ms * lam0 : 0;
     let mu = 1e-6;
     for (let it = 0; it < 200; it++) {
       iters++;
+      if (Date.now() - t0 > limit) { timedOut = true; break; }
       const Xv = Y.subarray(0, 3 * N), cur = evalAll(Xv, Y[n - 1], true, F);
-      let gmax = 0; for (let i = 0; i < n; i++) gmax = Math.max(gmax, Math.abs(cur.g[i]));
+      let gmax = 0;
+      if (bandInfo) { for (const i of bandInfo.fullOf) gmax = Math.max(gmax, Math.abs(cur.g[i])); gmax = Math.max(gmax, Math.abs(cur.g[n - 1])); }
+      else for (let i = 0; i < n; i++) gmax = Math.max(gmax, Math.abs(cur.g[i]));
       if (gmax < 1e-9 * Math.max(F, 1e-12) + 1e-14) break;
-      const Rb = rigidBasis(Xv);
       let dmean = 0; for (let i = 0; i < n; i++) dmean += Math.abs(cur.H[i * n + i]) / n;
-      for (const q of Rb) for (let i = 0; i < n; i++) { if (!q[i]) continue; for (let j = 0; j < n; j++) cur.H[i * n + j] += dmean * q[i] * q[j]; }
+      if (!bandInfo) { const Rb = rigidBasis(Xv); for (const q of Rb) for (let i = 0; i < n; i++) { if (!q[i]) continue; for (let j = 0; j < n; j++) cur.H[i * n + j] += dmean * q[i] * q[j]; } }
       let accepted = false;
       for (let tries = 0; tries < 30; tries++) {
-        const A = Float64Array.from(cur.H);
-        for (let i = 0; i < n; i++) A[i * n + i] += mu * dmean;
-        const rhs = cur.g.map(v => -v);
-        const dx = solveDense(A, rhs, n);
+        let dx; factors++;
+        if (bandInfo) dx = bandStep(cur.H, cur.g, mu, dmean);
+        else {
+          const A = Float64Array.from(cur.H);
+          for (let i = 0; i < n; i++) A[i * n + i] += mu * dmean;
+          dx = solveDense(A, cur.g.map(v => -v), n);
+        }
         if (dx) {
           const Z = Float64Array.from(Y); for (let i = 0; i < n; i++) Z[i] += dx[i];
           const nw = evalAll(Z.subarray(0, 3 * N), Z[n - 1], false, F);
@@ -385,14 +437,14 @@ function formFind(model, opts = {}) {
       if (!accepted) break;
       if (Y[n - 1] > 1e4 * lam0) { runaway = true; break; }
     }
-    if (runaway) break;
+    if (runaway || timedOut) break;
   }
   const Xf = Y.subarray(0, 3 * N);
   const lamF = Y[n - 1];
   const fin = evalAll(Xf, lamF, false, grow.length ? eps[eps.length - 1] * Ms * lam0 : 0);
   const P = []; for (let i = 0; i < N; i++) P.push([Xf[3 * i], Xf[3 * i + 1], Xf[3 * i + 2]]);
   const lengths = mem.map(e => dist(P[e.a], P[e.b]));
-  return { P, lengths, tension: Array.from(fin.T), lambda: lamF, iters, runaway };
+  return { P, lengths, tension: Array.from(fin.T), lambda: lamF, iters, runaway, factors, timedOut, ms: Date.now() - t0 };
 }
 
 // ---------- verification ----------
@@ -692,6 +744,27 @@ function bandPD(nDof, entries, freeOf) {
   }
   return { ok: true, band: b, minPivot };
 }
+// In-place banded Cholesky: L is nf rows of (b + 1), entry (i, j) for j in [i - b, i] at i*(b+1) + j - i + b.
+function bandFactor(L, nf, b) {
+  const w = b + 1;
+  for (let i = 0; i < nf; i++) {
+    const j0 = Math.max(0, i - b), ri = i * w - i + b;
+    for (let j = j0; j <= i; j++) {
+      const rj = j * w - j + b;
+      let sum = L[ri + j];
+      for (let k = Math.max(j0, j - b); k < j; k++) sum -= L[ri + k] * L[rj + k];
+      if (i === j) { if (!(sum > 0)) return false; L[ri + i] = Math.sqrt(sum); }
+      else L[ri + j] = sum / L[rj + j];
+    }
+  }
+  return true;
+}
+function bandSolve(L, nf, b, rhs) {
+  const w = b + 1, y = Float64Array.from(rhs);
+  for (let i = 0; i < nf; i++) { const ri = i * w - i + b; let s = y[i]; for (let k = Math.max(0, i - b); k < i; k++) s -= L[ri + k] * y[k]; y[i] = s / L[ri + i]; }
+  for (let i = nf - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k <= Math.min(nf - 1, i + b); k++) s -= L[k * w - k + b + i] * y[k]; y[i] = s / L[i * w - i + b + i]; }
+  return y;
+}
 // three nodes in general position, used to pin away rigid motions (and a fourth for affine maps)
 function pinNodes(P) {
   const p0 = 0; let p1 = 0, p2 = 0, p3 = 0, best = -1;
@@ -780,9 +853,9 @@ function jointClasses(P, members, q) {
   return [...cls.values()].sort((a, b) => b.count - a.count);
 }
 
-function solveModel(model) {
+function solveModel(model, opts = {}) {
   const sym = model.P.length > 36 ? findSymmetry(model.P, model.members) : null;
-  const r = sym ? formFindSym(model, sym) : formFind(model);
+  const r = sym ? formFindSym(model, sym, opts) : formFind(model, opts);
   const v = model.P.length <= 80 ? verify(r.P, model.members, r.tension) : verifyBand(r.P, model.members, r.tension);
   v.classes = jointClasses(r.P, model.members, v.q);
   if (sym) r.repeatUnits = sym.reps.length;

@@ -825,28 +825,80 @@ function formFind(model, opts = {}) {
     return Q;
   }
 
+  // Big structures without the icosahedral symmetry (towers): solve each Newton step with a banded
+  // Cholesky factorization instead of a dense one. Joints are reordered (reverse Cuthill-McKee) so the
+  // stiffness matrix is a narrow band, and 6 coordinates are pinned to remove rigid motion. Dense cost
+  // grows with joints^3, banded with joints * band^2.
+  const useBand = opts.band !== undefined ? opts.band : N > 36;
+  let bandInfo = null;
+  if (useBand) {
+    const adj = model.P.map(() => []); mem.forEach(e => { adj[e.a].push(e.b); adj[e.b].push(e.a); });
+    const ord = rcmOrder(N, adj), pos = new Int32Array(N); ord.forEach((v, i) => pos[v] = i);
+    const Pn = []; for (let i = 0; i < N; i++) Pn.push([X[3 * i], X[3 * i + 1], X[3 * i + 2]]);
+    const pin = pinNodes(Pn), fixed = new Set();
+    for (let d = 0; d < 3; d++) fixed.add(3 * pin.p0 + d);
+    const ax = [0, 1, 2].sort((x, y) => Math.abs(pin.d01[x]) - Math.abs(pin.d01[y]));
+    fixed.add(3 * pin.p1 + ax[0]); fixed.add(3 * pin.p1 + ax[1]);
+    const an = [0, 1, 2].sort((x, y) => Math.abs(pin.nrm[y]) - Math.abs(pin.nrm[x]));
+    fixed.add(3 * pin.p2 + an[0]);
+    const freeOf = new Int32Array(3 * N).fill(-1), fullOf = [];
+    const byPos = []; for (let i = 0; i < N; i++) for (let d = 0; d < 3; d++) byPos.push([3 * pos[i] + d, 3 * i + d]);
+    byPos.sort((x, y) => x[0] - y[0]);
+    for (const [, full] of byPos) if (!fixed.has(full)) { freeOf[full] = fullOf.length; fullOf.push(full); }
+    let b = 0; mem.forEach(e => { for (let p = 0; p < 3; p++) for (let q = 0; q < 3; q++) { const i = freeOf[3 * e.a + p], j = freeOf[3 * e.b + q]; if (i >= 0 && j >= 0) b = Math.max(b, Math.abs(i - j)); } });
+    for (let i = 0; i < N; i++) for (let p = 0; p < 3; p++) for (let q = 0; q < 3; q++) { const x = freeOf[3 * i + p], y = freeOf[3 * i + q]; if (x >= 0 && y >= 0) b = Math.max(b, Math.abs(x - y)); }
+    bandInfo = { freeOf, fullOf, nf: fullOf.length, b };
+  }
+  // one damped Newton step on the banded path; the growth scale lambda is the last unknown, handled
+  // by a Schur complement so the band stays narrow
+  function bandStep(H, g, mu, dmean) {
+    const { fullOf, nf, b } = bandInfo, w = b + 1, L = new Float64Array(nf * w);
+    for (let i = 0; i < nf; i++) { const fi = fullOf[i]; for (let j = Math.max(0, i - b); j <= i; j++) L[i * w + (j - i + b)] = H[fi * n + fullOf[j]]; L[i * w + b] += mu * dmean; }
+    if (!bandFactor(L, nf, b)) return null;
+    const rhs = new Float64Array(nf), hv = new Float64Array(nf);
+    for (let i = 0; i < nf; i++) { rhs[i] = -g[fullOf[i]]; hv[i] = H[fullOf[i] * n + n - 1]; }
+    const y1 = bandSolve(L, nf, b, rhs), y2 = bandSolve(L, nf, b, hv);
+    let dl = 0;
+    const hll = H[(n - 1) * n + n - 1] + mu * dmean;
+    let sc = hll; for (let i = 0; i < nf; i++) sc -= hv[i] * y2[i];
+    if (grow.length) {
+      if (!(sc > 0)) return null;
+      let num = -g[n - 1]; for (let i = 0; i < nf; i++) num -= hv[i] * y1[i];
+      dl = num / sc;
+    }
+    const dx = new Float64Array(n);
+    for (let i = 0; i < nf; i++) dx[fullOf[i]] = y1[i] - y2[i] * dl;
+    dx[n - 1] = dl;
+    return dx;
+  }
   // continuation on the push F: larger push first (well conditioned), then shrink toward the exact limit
   const Ms = Math.max(1, grow.length);
   const eps = opts.eps || [1e-2, 1e-3, 1e-4, 1e-5, 1e-6];
   let Y = new Float64Array(n); Y.set(X); Y[n - 1] = lam;
-  let iters = 0, ok = true, runaway = false;
+  let iters = 0, ok = true, runaway = false, factors = 0, timedOut = false;
+  const t0 = Date.now(), limit = opts.timeLimit || Infinity;
   for (const ep of eps) {
     const F = grow.length ? ep * Ms * lam0 : 0;
     let mu = 1e-6;
     for (let it = 0; it < 200; it++) {
       iters++;
+      if (Date.now() - t0 > limit) { timedOut = true; break; }
       const Xv = Y.subarray(0, 3 * N), cur = evalAll(Xv, Y[n - 1], true, F);
-      let gmax = 0; for (let i = 0; i < n; i++) gmax = Math.max(gmax, Math.abs(cur.g[i]));
+      let gmax = 0;
+      if (bandInfo) { for (const i of bandInfo.fullOf) gmax = Math.max(gmax, Math.abs(cur.g[i])); gmax = Math.max(gmax, Math.abs(cur.g[n - 1])); }
+      else for (let i = 0; i < n; i++) gmax = Math.max(gmax, Math.abs(cur.g[i]));
       if (gmax < 1e-9 * Math.max(F, 1e-12) + 1e-14) break;
-      const Rb = rigidBasis(Xv);
       let dmean = 0; for (let i = 0; i < n; i++) dmean += Math.abs(cur.H[i * n + i]) / n;
-      for (const q of Rb) for (let i = 0; i < n; i++) { if (!q[i]) continue; for (let j = 0; j < n; j++) cur.H[i * n + j] += dmean * q[i] * q[j]; }
+      if (!bandInfo) { const Rb = rigidBasis(Xv); for (const q of Rb) for (let i = 0; i < n; i++) { if (!q[i]) continue; for (let j = 0; j < n; j++) cur.H[i * n + j] += dmean * q[i] * q[j]; } }
       let accepted = false;
       for (let tries = 0; tries < 30; tries++) {
-        const A = Float64Array.from(cur.H);
-        for (let i = 0; i < n; i++) A[i * n + i] += mu * dmean;
-        const rhs = cur.g.map(v => -v);
-        const dx = solveDense(A, rhs, n);
+        let dx; factors++;
+        if (bandInfo) dx = bandStep(cur.H, cur.g, mu, dmean);
+        else {
+          const A = Float64Array.from(cur.H);
+          for (let i = 0; i < n; i++) A[i * n + i] += mu * dmean;
+          dx = solveDense(A, cur.g.map(v => -v), n);
+        }
         if (dx) {
           const Z = Float64Array.from(Y); for (let i = 0; i < n; i++) Z[i] += dx[i];
           const nw = evalAll(Z.subarray(0, 3 * N), Z[n - 1], false, F);
@@ -857,14 +909,14 @@ function formFind(model, opts = {}) {
       if (!accepted) break;
       if (Y[n - 1] > 1e4 * lam0) { runaway = true; break; }
     }
-    if (runaway) break;
+    if (runaway || timedOut) break;
   }
   const Xf = Y.subarray(0, 3 * N);
   const lamF = Y[n - 1];
   const fin = evalAll(Xf, lamF, false, grow.length ? eps[eps.length - 1] * Ms * lam0 : 0);
   const P = []; for (let i = 0; i < N; i++) P.push([Xf[3 * i], Xf[3 * i + 1], Xf[3 * i + 2]]);
   const lengths = mem.map(e => dist(P[e.a], P[e.b]));
-  return { P, lengths, tension: Array.from(fin.T), lambda: lamF, iters, runaway };
+  return { P, lengths, tension: Array.from(fin.T), lambda: lamF, iters, runaway, factors, timedOut, ms: Date.now() - t0 };
 }
 
 // ---------- verification ----------
@@ -1164,6 +1216,27 @@ function bandPD(nDof, entries, freeOf) {
   }
   return { ok: true, band: b, minPivot };
 }
+// In-place banded Cholesky: L is nf rows of (b + 1), entry (i, j) for j in [i - b, i] at i*(b+1) + j - i + b.
+function bandFactor(L, nf, b) {
+  const w = b + 1;
+  for (let i = 0; i < nf; i++) {
+    const j0 = Math.max(0, i - b), ri = i * w - i + b;
+    for (let j = j0; j <= i; j++) {
+      const rj = j * w - j + b;
+      let sum = L[ri + j];
+      for (let k = Math.max(j0, j - b); k < j; k++) sum -= L[ri + k] * L[rj + k];
+      if (i === j) { if (!(sum > 0)) return false; L[ri + i] = Math.sqrt(sum); }
+      else L[ri + j] = sum / L[rj + j];
+    }
+  }
+  return true;
+}
+function bandSolve(L, nf, b, rhs) {
+  const w = b + 1, y = Float64Array.from(rhs);
+  for (let i = 0; i < nf; i++) { const ri = i * w - i + b; let s = y[i]; for (let k = Math.max(0, i - b); k < i; k++) s -= L[ri + k] * y[k]; y[i] = s / L[ri + i]; }
+  for (let i = nf - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k <= Math.min(nf - 1, i + b); k++) s -= L[k * w - k + b + i] * y[k]; y[i] = s / L[i * w - i + b + i]; }
+  return y;
+}
 // three nodes in general position, used to pin away rigid motions (and a fourth for affine maps)
 function pinNodes(P) {
   const p0 = 0; let p1 = 0, p2 = 0, p3 = 0, best = -1;
@@ -1252,9 +1325,9 @@ function jointClasses(P, members, q) {
   return [...cls.values()].sort((a, b) => b.count - a.count);
 }
 
-function solveModel(model) {
+function solveModel(model, opts = {}) {
   const sym = model.P.length > 36 ? findSymmetry(model.P, model.members) : null;
-  const r = sym ? formFindSym(model, sym) : formFind(model);
+  const r = sym ? formFindSym(model, sym, opts) : formFind(model, opts);
   const v = model.P.length <= 80 ? verify(r.P, model.members, r.tension) : verifyBand(r.P, model.members, r.tension);
   v.classes = jointClasses(r.P, model.members, v.q);
   if (sym) r.repeatUnits = sym.reps.length;
@@ -1343,7 +1416,7 @@ self.onmessage = e => {
   if (bench) { self.postMessage({ id, bench: runBench() }); return; }
   if (tight) { try { const o = TG.tighten(model); self.postMessage({ id, tight: o && { lens: o.members.map(m => m.len), changed: o.changed } }); } catch (err) { self.postMessage({ id, tight: null }); } return; }
   try {
-    const { r, v } = TG.solveModel(model);
+    const { r, v } = TG.solveModel(model, { timeLimit: 15000 });
     self.postMessage({ id, r, v });
   } catch (err) { self.postMessage({ id, error: String(err && err.message || err) }); }
 };
@@ -1365,31 +1438,43 @@ function runBench() {
     out.push(['Expanded octahedron, strut / cable', Math.sqrt(8 / 3).toFixed(5), r.lengths[k].toFixed(5)]); }
   return out;
 }`;
-let worker = null, jobId = 0, latest = 0;
-if (location.hash !== '#noworker') { // #noworker: run inline (used by the headless smoke test)
-  try { worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }))); } catch (e) { worker = null; }
+let worker = null, benchWorker = null, jobId = 0, latest = 0, inFlight = null;
+window.__twJobs = () => ({ inFlight: inFlight && inFlight.id, latest, jobId, worker: !!worker }); // debugging aid
+const workerUrl = (() => { try { return URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' })); } catch (e) { return null; } })();
+const makeWorker = () => { try { return workerUrl ? new Worker(workerUrl) : null; } catch (e) { return null; } };
+if (location.hash !== '#noworker') { worker = makeWorker(); benchWorker = makeWorker(); } // #noworker: run inline (headless smoke test)
+// A new solve replaces any solve still running: the worker is stopped and a fresh one started, so
+// stale jobs never pile up behind the one you want (that queue is what made towers look stuck).
+function cancelInFlight() {
+  if (!worker || !inFlight) return;
+  worker.terminate(); worker = makeWorker();
+  const was = inFlight; inFlight = null;
+  if (was.onCancel) was.onCancel();
 }
-function runJob(msg, cb) {
+function runJob(msg, cb, opts = {}) {
   const id = ++jobId;
-  if (!worker) { // fallback: run inline
+  if (!opts.bench) cancelInFlight(); // first: this may replace the worker
+  const w = opts.bench ? benchWorker : worker;
+  if (!w) { // fallback: run inline
     setTimeout(() => {
       if (msg.bench) { cb({ bench: [] }); return; }
       if (msg.tight) { const o = TG.tighten(msg.model); cb({ tight: o && { lens: o.members.map(m => m.len), changed: o.changed } }); return; }
-      try { cb(TG.solveModel(msg.model)); }
+      try { cb(TG.solveModel(msg.model, { timeLimit: 15000 })); }
       catch (err) { cb({ error: String(err && err.message || err) }); }
     }, 0);
     return id;
   }
-  const h = e => { if (e.data.id !== id) return; worker.removeEventListener('message', h); cb(e.data); };
-  worker.addEventListener('message', h);
-  worker.postMessage({ ...msg, id });
+  const h = e => { if (e.data.id !== id) return; w.removeEventListener('message', h); if (!opts.bench && inFlight && inFlight.id === id) inFlight = null; cb(e.data); };
+  w.addEventListener('message', h);
+  if (!opts.bench) inFlight = { id, onCancel: opts.onCancel };
+  w.postMessage({ ...msg, id });
   return id;
 }
 
 // ---------- state ----------
 const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
-  struct: null, over: {}, sel: -1,
+  struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
   view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
@@ -1412,8 +1497,17 @@ function build() {
   for (const g of Object.values(s.groups)) if (g.kind === 'c') g.len = +(g.len * BASE).toFixed(3);
   if (S.chir < 0) s.P = s.P.map(p => [-p[0], p[1], p[2]]);
   if (S.family === 'sphere') { const [m, n] = TG.SPHERE_SIZES[S.f]; s.repeats = Math.sqrt(m * m + m * n + n * n); }
+  // keep the member lengths you set for this family (groups you edited); the rest take this size's defaults
+  const memKey = S.family === 'sphere' ? 'sphere-' + S.pat : S.family, mem = S.groupMem[memKey];
+  if (mem) for (const [id, g] of Object.entries(s.groups)) if (mem[id] && mem[id].touched) { g.touched = true; if (g.kind === 'c' && mem[id].len > 0) g.len = mem[id].len; if (g.kind === 's' && mem[id].ratio > 0) g.ratio = mem[id].ratio; }
+  S.groupMem[memKey] = s.groups; // same objects: later edits are remembered too
   S.struct = s; S.over = {}; S.sel = -1;
 }
+function saveGroupMem() {
+  const out = {}; for (const [k, gs] of Object.entries(S.groupMem)) { out[k] = {}; for (const [id, g] of Object.entries(gs)) if (g.touched) out[k][id] = { len: g.len, ratio: g.ratio, touched: true }; }
+  store.set('tw.lengths', JSON.stringify(out));
+}
+try { const v = JSON.parse(store.get('tw.lengths') || '{}'); if (v && typeof v === 'object') S.groupMem = v; } catch (e) {}
 function model() {
   const s = S.struct;
   return { P: s.P, members: s.members.map((m, i) => { const g = s.groups[m.group], o = S.over[i] || {}; return { a: m.a, b: m.b, kind: m.kind, group: m.group, len: o.len ?? g.len, mode: o.mode ?? g.mode, ratio: o.ratio ?? g.ratio }; }) };
@@ -1432,9 +1526,11 @@ function solve() {
       $('busy').textContent = 'Could not solve these lengths. Showing the last good result.';
       return;
     }
-    $('busy').hidden = true;
+    $('busy').hidden = !r.timedOut;
+    if (r.timedOut) $('busy').textContent = 'Stopped after 15 s: these lengths do not settle. Showing where it got to.';
     if (exporting) exporting.cancel = true;
     S.model = md; S.shown = st; S.result = r; S.verify = data.v; buildEnd = null;
+    saveGroupMem();
     if (S.sel >= md.members.length) S.sel = -1;
     if (ANIM.on) stopBuild();
     fitView(); renderReport(); renderSel(); syncClip();
@@ -1455,7 +1551,7 @@ function renderGroups() {
     tb.appendChild(tr);
     const inp = tr.querySelector('input');
     if (g.kind === 's') inp.title = 'Relative length of growing struts';
-    inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v > 0)) return; if (g.kind === 'c') g.len = v; else g.ratio = v; solveSoon(); });
+    inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v > 0)) return; if (g.kind === 'c') g.len = v; else g.ratio = v; g.touched = true; saveGroupMem(); solveSoon(); });
   }
   const tr = document.createElement('tr');
   tr.innerHTML = `<td colspan="2" class="hint" style="padding-top:2px">Cable values in ${esc(S.units)}. Strut value is a ratio (grow).</td>`;
@@ -1575,7 +1671,7 @@ $('bTight').onclick = () => {
     if (st !== S.struct) return;
     data.tight.changed.forEach(k => { S.over[k] = { ...(S.over[k] || {}), len: data.tight.lens[k] }; });
     solveSoon(0);
-  });
+  }, { onCancel: () => { $('bTight').disabled = false; $('tightNote').textContent = 'Stopped: a new solve started.'; } });;
 };
 
 // ---------- exports ----------
@@ -2360,24 +2456,22 @@ $('family').addEventListener('change', e => setFamily(e.target.value));
 $('n').addEventListener('change', e => { const v = Math.max(3, Math.min(12, parseInt(e.target.value) || 3)); setFamily(S.family, v); });
 // repeats: Goldberg-Coxeter sizes, each one a finer repeat of the same icosahedral pattern
 $('f').innerHTML = TG.SPHERE_SIZES.map(([m, n], i) => { const T = m * m + m * n + n * n; return `<option value="${i}">${i + 1} \u00b7 ${30 * T} struts</option>`; }).join('');
-$('f').addEventListener('change', e => { S.f = Math.max(0, Math.min(TG.SPHERE_SIZES.length - 1, parseInt(e.target.value) || 0)); keepLengths(() => setFamily('sphere')); });
+$('f').addEventListener('change', e => { S.f = Math.max(0, Math.min(TG.SPHERE_SIZES.length - 1, parseInt(e.target.value) || 0)); setFamily('sphere'); });
 $('pat').addEventListener('change', e => { S.pat = e.target.value; setFamily('sphere'); });
-// changing the repeat count keeps the cable lengths you set, so the same web just grows
-function keepLengths(fn) { const g = S.struct && S.struct.groups; fn(); if (g && S.struct.groups.ring && g.ring) { for (const k of ['ring', 'cross', 'strut']) Object.assign(S.struct.groups[k], { len: g[k].len, ratio: g[k].ratio }); renderGroups(); solveSoon(0); } }
 $('k').addEventListener('change', e => { S.k = Math.max(2, Math.min(10, parseInt(e.target.value) || 4)); setFamily('tower'); });
-function setChir(c) { S.chir = c; $('chirR').setAttribute('aria-pressed', c > 0); $('chirL').setAttribute('aria-pressed', c < 0); const keep = { g: JSON.stringify(S.struct.groups), o: S.over }; build(); S.struct.groups = JSON.parse(keep.g); S.over = keep.o; renderGroups(); solveSoon(0); }
+function setChir(c) { S.chir = c; $('chirR').setAttribute('aria-pressed', c > 0); $('chirL').setAttribute('aria-pressed', c < 0); const o = S.over; build(); S.over = o; renderGroups(); solveSoon(0); }
 $('chirR').onclick = () => setChir(1); $('chirL').onclick = () => setChir(-1);
 $('units').addEventListener('input', e => { S.units = e.target.value.slice(0, 8) || 'cm'; renderGroups(); if (S.result) { renderReport(); renderSel(); } });
 $('dia').addEventListener('input', e => { const v = parseFloat(e.target.value); if (v >= 0) { S.dia = v; if (S.result) renderReport(); } });
 
 $('pDiss').onclick = () => {
   setFamily('prism', 3);
-  ['bot', 'top', 'side'].forEach(g => S.struct.groups[g].len = 20.44);
+  ['bot', 'top', 'side'].forEach(g => { S.struct.groups[g].len = 20.44; S.struct.groups[g].touched = true; }); saveGroupMem();
   const st = S.struct.members.map((m, i) => m.kind === 's' ? i : -1).filter(i => i >= 0);
   S.over[st[0]] = { mode: 'fixed', len: 26 }; S.over[st[1]] = { mode: 'fixed', len: 26 };
   S.sel = st[2]; renderGroups(); solveSoon(0);
 };
-function tetraPreset(b, c) { setFamily('tetra'); S.struct.groups.ring.len = b; S.struct.groups.cross.len = c; renderGroups(); solveSoon(0); }
+function tetraPreset(b, c) { setFamily('tetra'); Object.assign(S.struct.groups.ring, { len: b, touched: true }); Object.assign(S.struct.groups.cross, { len: c, touched: true }); saveGroupMem(); renderGroups(); solveSoon(0); }
 $('pTetra').onclick = () => tetraPreset(20, 20);
 $('pTetraC').onclick = () => tetraPreset(20, 30);
 
@@ -2386,7 +2480,7 @@ runJob({ bench: true }, data => {
   const rows = data.bench || [];
   $('bench').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r[0])}</td><td class="n">${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join('')
     + `<tr><td colspan="3" class="hint">* Pars' closed form, maximised numerically over \u03c6. Dissimilar value from his worked example (cm).</td></tr>` : '<tr><td colspan="3">Benchmarks need Web Workers.</td></tr>';
-});
+}, { bench: true });
 
 // start on the Pars dissimilar example so the first view shows the method
 const f0 = store.get('tw.family');

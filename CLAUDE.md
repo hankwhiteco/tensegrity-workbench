@@ -18,6 +18,8 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - A design only counts as valid if the verifier passes. Never tune the verifier to make a shape pass.
 - Big models (> 36 joints with icosahedral symmetry): `formFindSym` solves one repeat unit (1/60) and rotates it with the 60 icosahedral rotations. More than 80 joints: `verifyBand` uses reverse Cuthill-McKee ordering and a banded Cholesky factorization. It pins 6 dofs (prestress) or 4 joints (super stability), and a clean factorization proves positive definiteness. It does not count mechanisms or self-stresses.
 - `solveModel` picks the path. tests/verify_agree.js must show 0 disagreements between the dense and banded verifiers.
+- `formFind` also has a banded path (`opts.band`, default for more than 36 joints): RCM ordering, 6 pinned coordinates, banded Cholesky per Newton step, the growth scale handled by a Schur complement. Same answers as the dense path (1e-14). A 12 x 10 tower (240 joints) takes about 7 s; dense took minutes.
+- Solves stop after 15 s (`opts.timeLimit`) and return `timedOut`; the page says "Stopped after 15 s" and the checks report the shape as it is.
 
 ## Benchmarks (tests/benchmarks.js must keep matching)
 - Pars dissimilar 3-strut: cables 20.44, two struts 26.0, long strut 36.3 (we get 36.333)
@@ -60,6 +62,9 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - Lower panel collapses with the Hide/Show details strip; the strip keeps the verdict visible when collapsed. Full view also hides the side panel. Both are remembered in localStorage.
 - Model, structure and result are swapped in together, only when a solve succeeds. Earlier this was not the case: the draw loop indexed the old shape's nodes and died, and the shape vanished.
 - The draw loop must never stop on a bad frame.
+- One solve at a time: a new solve terminates the worker running the old one and starts a fresh worker (`cancelInFlight`). Pick the worker after cancelling, never before. Benchmarks run on their own worker. Stale queued solves were why towers looked stuck.
+- Member lengths are remembered per family (sphere per pattern), but only groups the user edited (`touched`), so changing struts, modules, repeats or twist keeps them, and untouched groups still take each size's defaults. Saved in localStorage (`tw.lengths`) on every edit.
+- Known gap: towers with more than 3 struts per module, or odd module counts, have slack cables at the default lengths. The interstage pattern needs work for wider modules. Tighten slack cables rescues many.
 
 ## Build animation
 - Watch it build button in the panel's build section (plays once by itself on the first sphere load). On the artboard: a compact bar with the caption, a round Play/Pause key (restarts once finished), the scrubber and a close button. Speed slider (panel) 0.25x to 8x, logarithmic, snaps to round values (remembered in localStorage).
