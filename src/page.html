@@ -389,6 +389,9 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <label class="layer" data-accent id="veAxWrap" hidden><input type="checkbox" id="bVEAx" checked>
           <svg viewBox="0 0 34 22"><path d="M6 19 L28 3" stroke-width="1" stroke-dasharray="2.5 2.5"/><circle cx="6" cy="19" r="1.6" stroke-width="1.2"/><circle cx="28" cy="3" r="1.6" stroke-width="1.2"/></svg>
           <span class="meta"><span class="name">Spin axes</span><span class="count">dashed, through opposite faces</span></span><span class="sw"></span></label>
+        <label class="layer" data-accent id="veLoopWrap" hidden><input type="checkbox" id="bVELoop">
+          <svg viewBox="0 0 34 22"><path d="M8 11 A9 7 0 1 1 17 18" stroke-width="1.3"/><circle cx="17" cy="18" r="1.8" stroke-width="1.2"/></svg>
+          <span class="meta"><span class="name">Continuous</span><span class="count" id="veLoopNote">draws, holds, unwinds, again</span></span><span class="sw"></span></label>
       </div>
       <div class="row"><span class="lbl">Artboard</span></div>
       <div class="seg three" role="radiogroup" aria-label="Artboard background">
@@ -551,7 +554,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -911,7 +914,7 @@ function draw(c = cv, cx = ctx, o = {}) {
     }
     ctx.globalAlpha = 1;
   }
-  if (S.ve && S.shown && S.shown.repeats) drawVE(ctx, d);
+  if (S.ve && S.shown && S.shown.repeats) drawVE(ctx, d, o.veT !== undefined ? o.veT : veTime());
   if (S.nodes) {
     ctx.font = `${11 * d}px "IBM Plex Mono", monospace`; ctx.fillStyle = colors.text;
     P.forEach((p, i) => ctx.fillText(i, p[0] + 5 * d, p[1] - 5 * d));
@@ -922,35 +925,76 @@ function draw(c = cv, cx = ctx, o = {}) {
 // sign flips, which are four of the sphere's three-fold axes (every sphere size is built symmetric about
 // them). Each great-circle disk is drawn faintly, with its rim and its axis through the centre.
 const VE_AXES = [[1, 1, 1], [1, 1, -1], [1, -1, 1], [-1, 1, 1]].map(v => v.map(x => x / Math.sqrt(3)));
-function drawVE(ctx, d) {
+// VE build: each great circle strokes itself round from a point with a bright tip, one after another;
+// its axis then grows out from the centre both ways and its disk fades in. Continuous: draw, hold, unwind
+// (axes draw back, then a tail chases each circle round), a short pause, and again. A cycle fits a whole
+// number of times into the Turn length, so a seamless turn export still loops.
+const VE_D = { stroke: 1.6, stagger: 0.55, axis: 0.9, lead: 0.3 };
+const VE_IN = 3 * VE_D.stagger + Math.max(VE_D.stroke, 0.6 * VE_D.stroke + VE_D.axis); // drawn in after this
+const VE_OUT = 3 * VE_D.stagger + VE_D.lead + VE_D.stroke;                           // unwound after this
+let VE_T = 0; // the VE's own clock, restarted whenever the VE is switched on
+const veCycle = () => S.turnSecs / Math.max(1, Math.round(S.turnSecs / 10));
+// per circle: the drawn arc [tail, head] as fractions of a turn, and how far its axis reaches (0 to 1)
+function veState(t) {
+  if (!(t >= 0)) return null;
+  const draw = x => [0, 1, 2, 3].map(i => ({ tail: 0, head: ease((x - i * VE_D.stagger) / VE_D.stroke),
+    axis: ease((x - i * VE_D.stagger - 0.6 * VE_D.stroke) / VE_D.axis) }));
+  if (!S.veLoop) return draw(t);
+  const P = veCycle(), k = Math.min(1, P / 9.5), u = t % P, eraseAt = P - (VE_OUT + 0.5) * k;
+  if (u < eraseAt) return draw(u / k);
+  const y = (u - eraseAt) / k;
+  return [0, 1, 2, 3].map(i => ({ tail: ease((y - i * VE_D.stagger - VE_D.lead) / VE_D.stroke), head: 1,
+    axis: 1 - ease((y - i * VE_D.stagger) / VE_D.axis) }));
+}
+// the VE time for the live view: during a build it waits for the sphere to finish, then runs in real time
+function veTime() {
+  if (reduce.matches) return VE_IN;
+  if (ANIM.on && ANIM.plan && !STILL) return ANIM.t < ANIM.plan.end || ANIM.endClock === undefined ? -1 : GIVE_T - ANIM.endClock;
+  return VE_T;
+}
+function drawVE(ctx, d, t) {
+  const st = veState(t);
+  if (!st) return;
   const c = fit.c; let R = 0; S.result.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
   R *= 1.03; // just outside the joints, so the rims read as their own rings
   const n = 120, col = colors.sel;
   ctx.save(); ctx.lineCap = 'round';
-  for (const N of VE_AXES) {
+  VE_AXES.forEach((N, ci) => {
+    const { tail, head, axis } = st[ci];
     const ref = Math.abs(N[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
     const a = norm3([N[1] * ref[2] - N[2] * ref[1], N[2] * ref[0] - N[0] * ref[2], N[0] * ref[1] - N[1] * ref[0]]);
     const b = [N[1] * a[2] - N[2] * a[1], N[2] * a[0] - N[0] * a[2], N[0] * a[1] - N[1] * a[0]];
     const Q = [];
-    for (let i = 0; i < n; i++) { const t = i / n * 2 * Math.PI; Q.push(project([0, 1, 2].map(k => c[k] + R * (Math.cos(t) * a[k] + Math.sin(t) * b[k])))); }
-    // the disk: a faint plane through the centre
-    ctx.globalAlpha = 0.03; ctx.fillStyle = col; ctx.beginPath();
-    Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
-    // the rim, fading on the far side like the struts
-    ctx.strokeStyle = col; ctx.lineWidth = 1.6 * d;
-    for (let i = 0; i < n; i++) {
-      const p = Q[i], q = Q[(i + 1) % n], depth = Math.max(0, Math.min(1, ((p[2] + q[2]) / 2 + R) / (2 * R)));
-      ctx.globalAlpha = Math.max(0.15, 1 - 0.7 * S.shade * depth);
-      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    for (let i = 0; i <= n; i++) { const t2 = i / n * 2 * Math.PI; Q.push(project([0, 1, 2].map(k => c[k] + R * (Math.cos(t2) * a[k] + Math.sin(t2) * b[k])))); }
+    const at = f => { const x = f * n, i = Math.min(n - 1, Math.floor(x)), r = x - i, p = Q[i], q = Q[i + 1]; return [p[0] + (q[0] - p[0]) * r, p[1] + (q[1] - p[1]) * r, p[2] + (q[2] - p[2]) * r]; };
+    const span = head - tail;
+    if (span > 0.001) {
+      // the disk: a faint plane through the centre, as much of it as the rim has drawn
+      ctx.globalAlpha = 0.03 * span; ctx.fillStyle = col; ctx.beginPath();
+      Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+      // the rim from tail to head, fading on the far side like the struts
+      ctx.strokeStyle = col; ctx.lineWidth = 1.6 * d;
+      const steps = Math.max(1, Math.ceil(span * n));
+      for (let j = 0; j < steps; j++) {
+        const p = at(tail + span * j / steps), q = at(tail + span * (j + 1) / steps);
+        const depth = Math.max(0, Math.min(1, ((p[2] + q[2]) / 2 + R) / (2 * R)));
+        ctx.globalAlpha = Math.max(0.15, 1 - 0.7 * S.shade * depth);
+        ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+      }
+      if (head < 1 || (tail > 0 && tail < 1)) { // the bright point at the moving end
+        const tip = at(head < 1 ? head : tail);
+        ctx.globalAlpha = 0.95; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(tip[0], tip[1], 2 * d, 0, 7); ctx.fill();
+      }
     }
-    // the axis of spin, through a pair of opposite triangular faces, with a point where it leaves each face
-    if (!S.veAxes) continue;
-    const e0 = project([0, 1, 2].map(k => c[k] - 1.12 * R * N[k])), e1 = project([0, 1, 2].map(k => c[k] + 1.12 * R * N[k]));
-    ctx.globalAlpha = 0.6; ctx.lineWidth = 0.9 * d; ctx.setLineDash([4 * d, 4 * d]);
+    // the axis of spin, through a pair of opposite triangular faces, grown out from the centre,
+    // with a point where it leaves each face
+    if (!S.veAxes || axis < 0.001) return;
+    const e0 = project([0, 1, 2].map(k => c[k] - 1.12 * R * axis * N[k])), e1 = project([0, 1, 2].map(k => c[k] + 1.12 * R * axis * N[k]));
+    ctx.globalAlpha = 0.6; ctx.strokeStyle = col; ctx.lineWidth = 0.9 * d; ctx.setLineDash([4 * d, 4 * d]);
     ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = col;
-    for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); ctx.globalAlpha = f[2] < 0 ? 0.9 : 0.4; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); }
-  }
+    const dot = clamp01((axis - 0.85) / 0.15);
+    if (dot > 0) { ctx.fillStyle = col; for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); ctx.globalAlpha = (f[2] < 0 ? 0.9 : 0.4) * dot; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); } }
+  });
   ctx.restore();
 }
 function pick(mx, my) {
@@ -989,8 +1033,11 @@ cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
 function toggle(id, key, after) { const b = $(id); b.checked = S[key]; b.addEventListener('change', () => { S[key] = b.checked; after && after(); }); }
-toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes'); toggle('bVE', 've', () => { legend(); syncVE(); }); toggle('bVEAx', 'veAxes');
-function syncVE() { $('veAxWrap').hidden = !(S.ve && S.family === 'sphere'); }
+toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes'); toggle('bVE', 've', () => { if (S.ve) VE_T = 0; legend(); syncVE(); }); toggle('bVEAx', 'veAxes'); toggle('bVELoop', 'veLoop', () => { VE_T = S.veLoop ? 0 : Math.max(VE_T, VE_IN); syncVE(); });
+function syncVE() {
+  $('veAxWrap').hidden = $('veLoopWrap').hidden = !(S.ve && S.family === 'sphere');
+  if (S.turnSecs) { const P = veCycle(), k = Math.round(S.turnSecs / P); $('veLoopNote').textContent = `one cycle every ${+P.toFixed(1)} s, ${k} per turn`; }
+}
 $('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
 function legend() {
   $('legend').innerHTML = S.force
@@ -1338,7 +1385,8 @@ function clipPlan(kind, fps) {
   if (!S.result) return null;
   if (kind === 'turn') { const T = S.turnSecs; return { kind, T, n: Math.max(2, Math.round(T * fps)) }; }
   if (buildEnd === null) { try { buildEnd = makePlan().end; } catch (e) { return null; } }
-  const T = buildEnd / ANIM.speed + BUILD_TAIL;
+  const veOn = S.ve && S.shown && S.shown.repeats; // the VE draws in after the sphere, in real time
+  const T = buildEnd / ANIM.speed + BUILD_TAIL + (veOn ? VE_IN + 1 : 0);
   return { kind, T, n: Math.ceil(T * fps) };
 }
 function syncClip() {
@@ -1346,6 +1394,7 @@ function syncClip() {
   const busy = !!exporting;
   document.querySelector(`input[name="clip"][value="${S.clip}"]`).checked = true;
   $('turnSecs').value = S.turnSecs; $('turnVal').textContent = `${S.turnSecs} s per turn`;
+  if ($('veLoopWrap')) syncVE();
   $('spinNote').textContent = `one turn every ${S.turnSecs} s, as exported`;
   $('exportBg').checked = S.exportBg;
   const p = clipPlan(S.clip, MP4_FPS);
@@ -1387,7 +1436,7 @@ function setProgress(u, label) {
 function framer(plan, fps, size) {
   const d = exportScale(size);
   if (plan.kind === 'turn') {
-    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives();
+    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T;
     return i => {
       const u = i / plan.n;
       S.view.yaw = yaw0 + 2 * Math.PI * u;
@@ -1396,7 +1445,8 @@ function framer(plan, fps, size) {
         const A = idlePose(t0 + u * plan.T), B = idlePose(t0 + u * plan.T - plan.T);
         base = A.map((p, k) => [0, 1, 2].map(j => p[j] * (1 - u) + B[k][j] * u));
       }
-      return { d, still: true, clean: true, base };
+      // the VE: a continuous cycle fits the turn a whole number of times; otherwise shown fully drawn
+      return { d, still: true, clean: true, base, veT: S.veLoop ? ve0 + u * plan.T : Math.max(ve0, VE_IN) };
     };
   }
   beginBuild();
@@ -1413,7 +1463,7 @@ async function runExport(kind) {
   if (!plan) return;
   const size = +$('motionSize').value;
   // everything a clip moves, so the view comes back exactly as it was
-  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, result: S.result,
+  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, result: S.result,
     anim: { on: ANIM.on, playing: ANIM.playing, t: ANIM.t, plan: ANIM.plan, viewT: ANIM.viewT, viewFrom: ANIM.viewFrom, viewTo: ANIM.viewTo, endClock: ANIM.endClock } };
   exporting = { kind, cancel: false };
   const btn = kind === 'gif' ? $('exGif') : $('exMp4');
@@ -1431,7 +1481,7 @@ async function runExport(kind) {
       blob = kind === 'gif' ? await encodeGif(lib, plan, c, cx, frame, fps) : await encodeMp4(lib, plan, c, cx, frame, fps);
     }
   } catch (e) { failed = e; console.error(e); }
-  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF;
+  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T;
   if (S.result === saved.result) Object.assign(ANIM, saved.anim);
   else if (ANIM.on) stopBuild(); // a new solve arrived meanwhile: the old build no longer fits
   if (ANIM.on && ANIM.plan) animCaption();
@@ -1552,7 +1602,7 @@ function step(dt, ui) {
     S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
   } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
-  GIVE_T += dt;
+  GIVE_T += dt; VE_T += dt;
   if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }
 }
 requestAnimationFrame(frame);
