@@ -383,6 +383,9 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <label class="layer" id="scaleWrap"><input type="checkbox" id="bScale" checked>
           <svg viewBox="0 0 34 22"><circle cx="10" cy="11" r="5" stroke-width="1.2"/><circle cx="23" cy="11" r="8.5" stroke-width="1.2"/></svg>
           <span class="meta"><span class="name">Fixed scale</span><span class="count">sphere grows with repeats</span></span><span class="sw"></span></label>
+        <label class="layer" data-accent id="veWrap"><input type="checkbox" id="bVE">
+          <svg viewBox="0 0 34 22"><circle cx="17" cy="11" r="9.5" stroke-width="1.2"/><ellipse cx="17" cy="11" rx="9.5" ry="3.6" stroke-width="1"/><ellipse cx="17" cy="11" rx="3.6" ry="9.5" stroke-width="1"/></svg>
+          <span class="meta"><span class="name">Vector equilibrium</span><span class="count">4 great circles, face-to-face axes</span></span><span class="sw"></span></label>
       </div>
       <div class="row"><span class="lbl">Artboard</span></div>
       <div class="seg three" role="radiogroup" aria-label="Artboard background">
@@ -545,7 +548,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -905,10 +908,46 @@ function draw(c = cv, cx = ctx, o = {}) {
     }
     ctx.globalAlpha = 1;
   }
+  if (S.ve && S.shown && S.shown.repeats) drawVE(ctx, d);
   if (S.nodes) {
     ctx.font = `${11 * d}px "IBM Plex Mono", monospace`; ctx.fillStyle = colors.text;
     P.forEach((p, i) => ctx.fillText(i, p[0] + 5 * d, p[1] - 5 * d));
   }
+}
+// Vector equilibrium overlay (spheres): Fuller's VE is four great circles whose axes run through its
+// opposite triangular faces. Those four face-to-face axes of spin are the cube diagonals (1, 1, 1) and its
+// sign flips, which are four of the sphere's three-fold axes (every sphere size is built symmetric about
+// them). Each great-circle disk is drawn faintly, with its rim and its axis through the centre.
+const VE_AXES = [[1, 1, 1], [1, 1, -1], [1, -1, 1], [-1, 1, 1]].map(v => v.map(x => x / Math.sqrt(3)));
+function drawVE(ctx, d) {
+  const c = fit.c; let R = 0; S.result.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
+  R *= 1.03; // just outside the joints, so the rims read as their own rings
+  const n = 120, col = colors.sel;
+  ctx.save(); ctx.lineCap = 'round';
+  for (const N of VE_AXES) {
+    const ref = Math.abs(N[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+    const a = norm3([N[1] * ref[2] - N[2] * ref[1], N[2] * ref[0] - N[0] * ref[2], N[0] * ref[1] - N[1] * ref[0]]);
+    const b = [N[1] * a[2] - N[2] * a[1], N[2] * a[0] - N[0] * a[2], N[0] * a[1] - N[1] * a[0]];
+    const Q = [];
+    for (let i = 0; i < n; i++) { const t = i / n * 2 * Math.PI; Q.push(project([0, 1, 2].map(k => c[k] + R * (Math.cos(t) * a[k] + Math.sin(t) * b[k])))); }
+    // the disk: a faint plane through the centre
+    ctx.globalAlpha = 0.03; ctx.fillStyle = col; ctx.beginPath();
+    Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+    // the rim, fading on the far side like the struts
+    ctx.strokeStyle = col; ctx.lineWidth = 1.6 * d;
+    for (let i = 0; i < n; i++) {
+      const p = Q[i], q = Q[(i + 1) % n], depth = Math.max(0, Math.min(1, ((p[2] + q[2]) / 2 + R) / (2 * R)));
+      ctx.globalAlpha = Math.max(0.15, 1 - 0.7 * S.shade * depth);
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    }
+    // the axis of spin, through a pair of opposite triangular faces, with a point where it leaves each face
+    const e0 = project([0, 1, 2].map(k => c[k] - 1.12 * R * N[k])), e1 = project([0, 1, 2].map(k => c[k] + 1.12 * R * N[k]));
+    ctx.globalAlpha = 0.6; ctx.lineWidth = 0.9 * d; ctx.setLineDash([4 * d, 4 * d]);
+    ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = col;
+    for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); ctx.globalAlpha = f[2] < 0 ? 0.9 : 0.4; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); }
+  }
+  ctx.restore();
 }
 function pick(mx, my) {
   if (!S.result) return -1;
@@ -946,12 +985,13 @@ cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
 function toggle(id, key, after) { const b = $(id); b.checked = S[key]; b.addEventListener('change', () => { S[key] = b.checked; after && after(); }); }
-toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes');
+toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes'); toggle('bVE', 've', legend);
 $('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
 function legend() {
   $('legend').innerHTML = S.force
     ? `<span><i style="background:var(--vp-compress)"></i>compression</span><span><i style="background:var(--vp-tension);height:2px"></i>tension (width = force)</span>`
     : `<span><i style="background:var(--vp-strut)"></i>strut</span><span><i style="background:var(--vp-cable);height:1px"></i>cable</span><span>dashed = slack</span>`;
+  if (S.ve && S.family === 'sphere') $('legend').innerHTML += `<span><i style="background:var(--vp-sel);height:1.5px"></i>VE great circles</span>`;
 }
 legend();
 // ---------- build animation ----------
@@ -1517,7 +1557,7 @@ function setFamily(f, n) {
   S.family = f; if (n) S.n = n;
   $('family').value = f; $('n').value = S.n; $('k').value = S.k;
   $('nwrap').hidden = f !== 'prism' && f !== 'tower'; $('kwrap').hidden = f !== 'tower';
-  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('scaleWrap').hidden = f !== 'sphere';
+  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('scaleWrap').hidden = $('veWrap').hidden = f !== 'sphere'; legend();
   build(); renderGroups(); solveSoon(0);
   store.set('tw.family', f); store.set('tw.n', String(S.n)); store.set('tw.k', String(S.k)); store.set('tw.size', String(S.f)); store.set('tw.pat', S.pat);
 }
