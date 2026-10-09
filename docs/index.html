@@ -386,6 +386,9 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <label class="layer" data-accent id="veWrap"><input type="checkbox" id="bVE">
           <svg viewBox="0 0 34 22"><circle cx="17" cy="11" r="9.5" stroke-width="1.2"/><ellipse cx="17" cy="11" rx="9.5" ry="3.6" stroke-width="1"/><ellipse cx="17" cy="11" rx="3.6" ry="9.5" stroke-width="1"/></svg>
           <span class="meta"><span class="name">Vector equilibrium</span><span class="count">4 great circles, face-to-face axes</span></span><span class="sw"></span></label>
+        <label class="layer" data-accent id="veAxWrap" hidden><input type="checkbox" id="bVEAx" checked>
+          <svg viewBox="0 0 34 22"><path d="M6 19 L28 3" stroke-width="1" stroke-dasharray="2.5 2.5"/><circle cx="6" cy="19" r="1.6" stroke-width="1.2"/><circle cx="28" cy="3" r="1.6" stroke-width="1.2"/></svg>
+          <span class="meta"><span class="name">Spin axes</span><span class="count">dashed, through opposite faces</span></span><span class="sw"></span></label>
       </div>
       <div class="row"><span class="lbl">Artboard</span></div>
       <div class="seg three" role="radiogroup" aria-label="Artboard background">
@@ -1479,7 +1482,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -1872,6 +1875,7 @@ function drawVE(ctx, d) {
       ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
     }
     // the axis of spin, through a pair of opposite triangular faces, with a point where it leaves each face
+    if (!S.veAxes) continue;
     const e0 = project([0, 1, 2].map(k => c[k] - 1.12 * R * N[k])), e1 = project([0, 1, 2].map(k => c[k] + 1.12 * R * N[k]));
     ctx.globalAlpha = 0.6; ctx.lineWidth = 0.9 * d; ctx.setLineDash([4 * d, 4 * d]);
     ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke(); ctx.setLineDash([]);
@@ -1916,7 +1920,8 @@ cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
 function toggle(id, key, after) { const b = $(id); b.checked = S[key]; b.addEventListener('change', () => { S[key] = b.checked; after && after(); }); }
-toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes'); toggle('bVE', 've', legend);
+toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes'); toggle('bVE', 've', () => { legend(); syncVE(); }); toggle('bVEAx', 'veAxes');
+function syncVE() { $('veAxWrap').hidden = !(S.ve && S.family === 'sphere'); }
 $('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
 function legend() {
   $('legend').innerHTML = S.force
@@ -2488,7 +2493,7 @@ function setFamily(f, n) {
   S.family = f; if (n) S.n = n;
   $('family').value = f; $('n').value = S.n; $('k').value = S.k;
   $('nwrap').hidden = f !== 'prism' && f !== 'tower'; $('kwrap').hidden = f !== 'tower';
-  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('scaleWrap').hidden = $('veWrap').hidden = f !== 'sphere'; legend();
+  $('fwrap').hidden = f !== 'sphere'; $('pwrap').hidden = f !== 'sphere'; $('f').value = String(S.f); $('pat').value = S.pat; $('scaleWrap').hidden = $('veWrap').hidden = f !== 'sphere'; legend(); syncVE();
   build(); renderGroups(); solveSoon(0);
   store.set('tw.family', f); store.set('tw.n', String(S.n)); store.set('tw.k', String(S.k)); store.set('tw.size', String(S.f)); store.set('tw.pat', S.pat);
 }
