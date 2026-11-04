@@ -249,6 +249,16 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
          opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 5; }
 .toast.show { opacity: 1; }
 
+/* website preview: a mock page running the exported component, with its settings */
+.webview { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-columns: minmax(0, 1fr) 320px; background: var(--bg); }
+.wv-page { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 14px; padding: 22px 28px; min-width: 0; min-height: 0; }
+.wv-page iframe { width: 100%; height: 100%; border: 0; border-radius: 6px; background: #0c0c0b; box-shadow: inset 0 0 0 1px var(--line); }
+.wv-panel { overflow-y: auto; }
+.wv-panel .btn { width: 100%; }
+@media (max-width: 900px) {
+  .webview { grid-template-columns: minmax(0, 1fr); grid-template-rows: 70vh auto; overflow-y: auto; }
+  .wv-page { padding: 12px; }
+}
 @media (max-width: 900px) {
   html, body { height: auto; }
   .app, .app.full { grid-template-columns: minmax(0, 1fr); height: auto; }
@@ -431,7 +441,6 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <button class="btn" id="exPng">PNG still</button>
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
-      <button class="btn" id="exFramer" title="A Framer code component of this structure: drag to turn, cursor tilt, hover highlight, scroll build">Framer component (.tsx)</button>
       <div class="row"><span class="lbl">Motion</span><span class="val" id="clipInfo"></span></div>
       <div class="seg" role="radiogroup" aria-label="Clip">
         <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
@@ -459,6 +468,15 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
     </section>
 
     <section>
+      <h2>Website</h2>
+      <p class="note">This structure as a Framer component. Try it on a mock page first: what you set there goes into the export.</p>
+      <div class="exports">
+        <button class="btn primary" id="webPreview">Preview on a page</button>
+        <button class="btn" id="exFramer" title="A Framer code component of this structure: drag to turn, cursor tilt, hover highlight, scroll build">Framer (.tsx)</button>
+      </div>
+    </section>
+
+    <section>
       <h2>From Pars' pages</h2>
       <div class="presets">
         <button class="btn" id="pDiss">Dissimilar 3-strut<small>Cables 20.44, two struts fixed at 26.0. Pars finds 36.3 for the third.</small></button>
@@ -476,6 +494,50 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
     </section>
   </aside>
 </div>
+<div class="webview" id="webview" hidden role="dialog" aria-label="Website preview">
+  <div class="wv-page">
+    <div class="masthead">
+      <div class="brand"><span class="grille" aria-hidden="true"></span><h1>Website preview</h1></div>
+      <span class="hint">Scroll the page to build it &#xb7; drag to turn &#xb7; hover a member &#xb7; move the mouse to tilt</span>
+    </div>
+    <iframe id="wvFrame" title="Mock web page with the tensegrity component"></iframe>
+  </div>
+  <aside class="panel wv-panel">
+    <section>
+      <h2>Interaction</h2>
+      <div class="layers">
+        <label class="layer"><input type="checkbox" id="wvSpin">
+          <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
+          <span class="meta"><span class="name">Spin</span><span class="count" id="wvSpinNote"></span></span><span class="sw"></span></label>
+        <label class="layer"><input type="checkbox" id="wvDrag">
+          <svg viewBox="0 0 34 22"><path d="M4 11 H30 M24 6 L30 11 L24 16 M10 6 L4 11 L10 16" stroke-width="1.3"/></svg>
+          <span class="meta"><span class="name">Drag to turn</span><span class="count">pan-y on phones, so the page still scrolls</span></span><span class="sw"></span></label>
+        <label class="layer" id="wvInertiaWrap"><input type="checkbox" id="wvInertia">
+          <svg viewBox="0 0 34 22"><path d="M4 11 H22" stroke-width="1.3"/><path d="M24 11 H27 M29 11 H30" stroke-width="1.3"/></svg>
+          <span class="meta"><span class="name">Inertia</span><span class="count">a flick runs on and slows down</span></span><span class="sw"></span></label>
+        <label class="layer"><input type="checkbox" id="wvTilt">
+          <svg viewBox="0 0 34 22"><circle cx="15" cy="11" r="8" stroke-width="1.2"/><path d="M26 5 L31 3 M28 9 L32 9" stroke-width="1.2"/></svg>
+          <span class="meta"><span class="name">Cursor tilt</span><span class="count">leans toward the mouse</span></span><span class="sw"></span></label>
+        <label class="layer" data-accent><input type="checkbox" id="wvHover">
+          <svg viewBox="0 0 34 22"><path d="M5 18 L25 4" stroke-width="2.4"/><path d="M22 14 L26 20 L27 15 L32 15 Z" stroke-width="1"/></svg>
+          <span class="meta"><span class="name">Hover highlight</span><span class="count">a member and its neighbours</span></span><span class="sw"></span></label>
+        <label class="layer"><input type="checkbox" id="wvScroll">
+          <svg viewBox="0 0 34 22"><rect x="11" y="2" width="12" height="18" rx="6" stroke-width="1.2"/><path d="M17 6 V10" stroke-width="1.4"/></svg>
+          <span class="meta"><span class="name">Scroll build</span><span class="count">builds as it comes into view</span></span><span class="sw"></span></label>
+      </div>
+      <div class="row" id="wvTiltRow"><label for="wvTiltAmt">Tilt</label><span class="val" id="wvTiltVal"></span><input type="range" id="wvTiltAmt" min="0" max="30" step="1"></div>
+      <div class="row" id="wvStartRow"><label for="wvStart">Starts at</label><span class="val" id="wvStartVal"></span><input type="range" id="wvStart" min="0" max="100" step="1"></div>
+      <div class="row" id="wvEndRow"><label for="wvEnd">Ends at</label><span class="val" id="wvEndVal"></span><input type="range" id="wvEnd" min="0" max="100" step="1"></div>
+      <p class="note" id="wvScrollNote">Positions of the frame's top edge in the window, from the top. The build runs from the first to the second as you scroll, and backs up on the way up.</p>
+      <div class="row"><label for="wvZoom">Size in frame</label><span class="val" id="wvZoomVal"></span><input type="range" id="wvZoom" min="40" max="160" step="1"></div>
+    </section>
+    <section>
+      <div class="transport"><button class="btn grow" id="wvTop">Back to top</button><button class="btn primary grow" id="wvExport">Framer (.tsx)</button></div>
+      <button class="btn" id="wvClose">Close preview</button>
+      <p class="note">Colours, shading and turn time come from the workbench view. In Framer every setting here is in the component's properties panel.</p>
+    </section>
+  </aside>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 
@@ -484,7 +546,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 // workbench; this file only draws it. Drag to turn (with inertia), the sphere leans toward the cursor,
 // members light up under the cursor, and it can build itself as the page scrolls.
 // Add it in Framer: Assets > Code > New code file, paste this file, then drag the component onto the canvas.
-import { useEffect, useRef } from "react"
+import { createElement, useEffect, useRef } from "react"
 import { addPropertyControls, ControlType, RenderTarget } from "framer"
 
 // P: joints (x, y, z, centred, radius 1). M: members (a, b, 1 = strut / 0 = cable).
@@ -716,24 +778,28 @@ export default function TensegritySphere(props) {
     // redraw when a property changes while the loop is idle (Framer's editor, reduced motion)
     useEffect(() => { if (redraw.current) redraw.current() })
 
-    return (
-        <div ref={wrap} style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: props.background, ...props.style }}>
-            <canvas
-                ref={canvas}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", cursor: props.drag ? "grab" : "default", touchAction: props.drag ? "pan-y" : "auto" }}
-                aria-label={DATA ? DATA.name : "Tensegrity sphere"}
-                role="img"
-            />
-        </div>
+    // createElement rather than JSX, so the workbench can preview this exact file without a compiler
+    return createElement(
+        "div",
+        { ref: wrap, style: { position: "relative", width: "100%", height: "100%", overflow: "hidden", background: props.background, ...props.style } },
+        createElement("canvas", {
+            ref: canvas,
+            style: { position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", cursor: props.drag ? "grab" : "default", touchAction: props.drag ? "pan-y" : "auto" },
+            "aria-label": DATA ? DATA.name : "Tensegrity sphere",
+            role: "img",
+        })
     )
 }
 
 const S = (DATA && DATA.style) || {}
+const I = (DATA && DATA.interact) || {} // interaction settings chosen in the workbench preview
+const or = (v, d) => (v === undefined ? d : v)
 TensegritySphere.defaultProps = {
     background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#f2f0ea", cableColor: S.cable || "#9a9890",
-    highlightColor: S.highlight || "#f26a2c", spin: true, turnSeconds: S.turn || 35, drag: true, inertia: true,
-    tilt: true, tiltAmount: 8, hover: true, scrollBuild: true, buildStart: 95, buildEnd: 35,
-    depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: 100, strutWidth: 100,
+    highlightColor: S.highlight || "#f26a2c", spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
+    inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
+    scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
+    depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,
 }
 const D = TensegritySphere.defaultProps
 
@@ -2613,7 +2679,7 @@ function syncClip() {
   $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
   $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
   $('gifRate').value = String(S.gifCs);
-  $('exPng').disabled = $('exFramer').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
+  $('exPng').disabled = $('exFramer').disabled = $('webPreview').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
 }
 document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener('change', () => { S.clip = r.value; store.set('tw.clip', S.clip); syncClip(); }));
 $('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });
@@ -2787,7 +2853,7 @@ function framerData() {
   });
   let sl = 0, sn = 0; md.members.forEach((m, k) => { if (m.kind === 's') { sl += r.lengths[k]; sn++; } });
   return { name: S.shown.name, P, M, B, end: pl ? r3(pl.end) : 0, strut: r4(sn ? sl / sn / R : 0.3),
-    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch) },
+    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch) }, interact: { ...S.web },
     style: { background: exportFill() || 'rgba(0, 0, 0, 0)', strut: colors.strut, cable: colors.cable, highlight: colors.sel,
       turn: S.turnSecs, shade: Math.round(S.shade * 100), cableOpacity: Math.round(Math.min(1, S.cable) * 100) } };
 }
@@ -2796,6 +2862,82 @@ $('exFramer').addEventListener('click', () => {
   const src = $('framerSrc').textContent.replace('/*DATA*/ null', JSON.stringify(framerData()));
   offer('TensegritySphere.tsx', new Blob([src], { type: 'text/plain' }));
 });
+
+// Website preview: a mock page that runs the exact exported component (React 18 from unpkg, a small
+// stand-in for the "framer" module), with its interaction settings beside it. The settings are
+// remembered and baked into the export as the component's defaults (DATA.interact).
+const WEB_DEFAULT = { spin: true, drag: true, inertia: true, tilt: true, tiltAmount: 8, hover: true, scrollBuild: true, buildStart: 95, buildEnd: 35, zoom: 100 };
+S.web = { ...WEB_DEFAULT };
+try { Object.assign(S.web, JSON.parse(store.get('tw.web') || '{}')); } catch (e) {}
+const componentSource = () => $('framerSrc').textContent.replace('/*DATA*/ null', JSON.stringify(framerData()));
+const WV_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; background: #0c0c0b; color: #e8e6e0; font: 15px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  nav { display: flex; gap: 24px; align-items: center; padding: 22px 6vw; color: #8d8b85; font-size: 13px; }
+  nav b { color: #e8e6e0; margin-right: auto; font-weight: 500; }
+  .hero { min-height: 92vh; display: grid; align-content: center; gap: 18px; padding: 0 6vw; }
+  .hero h1 { font-weight: 300; font-size: clamp(32px, 6vw, 72px); line-height: 1.05; margin: 0; max-width: 12ch; }
+  .hero p { color: #8d8b85; max-width: 40ch; margin: 0; }
+  .cue { color: #f26a2c; font-size: 13px; }
+  #stage { width: min(78vh, 86vw); aspect-ratio: 1; margin: 0 auto; }
+  .copy { padding: 18vh 6vw 60vh; display: grid; gap: 14px; max-width: 640px; margin: 0 auto; }
+  .bar { height: 12px; border-radius: 3px; background: #1f1f1e; }
+  .err { padding: 40px 6vw; color: #ef6d62; }
+</style></head><body>
+<nav><b>Studio</b><span>Work</span><span>About</span><span>Contact</span></nav>
+<section class="hero"><h1>Structures held in tension</h1><p>A mock page for trying the component. Scroll down to build it.</p><span class="cue">Scroll &darr;</span></section>
+<div id="stage"></div>
+<div class="copy"><div class="bar" style="width:62%"></div><div class="bar"></div><div class="bar" style="width:88%"></div><div class="bar" style="width:40%"></div></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"><\/script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>
+<script>
+  window.__boot = function (src) {
+    try {
+      // the exported file, unchanged apart from its imports and export
+      const body = src.replace(/^import .*$/gm, '').replace('export default function', 'function') + '\\nreturn TensegritySphere;';
+      const framer = { ControlType: new Proxy({}, { get: (_, k) => k }), addPropertyControls: (c, p) => { c.propertyControls = p; },
+        RenderTarget: { canvas: 'canvas', preview: 'preview', current: () => 'preview' } };
+      const C = new Function('React', 'framer', 'const { createElement, useEffect, useRef } = React; const { addPropertyControls, ControlType, RenderTarget } = framer;\\n' + body)(React, framer);
+      const root = ReactDOM.createRoot(document.getElementById('stage'));
+      window.__render = props => root.render(React.createElement(C, { ...C.defaultProps, ...props }));
+      return true;
+    } catch (e) { document.body.insertAdjacentHTML('afterbegin', '<p class="err">Could not run the component: ' + e.message + '</p>'); return false; }
+  };
+<\/script></body></html>`;
+function wvSync() {
+  const w = S.web, f = $('wvFrame').contentWindow;
+  $('wvSpin').checked = w.spin; $('wvDrag').checked = w.drag; $('wvInertia').checked = w.inertia; $('wvTilt').checked = w.tilt;
+  $('wvHover').checked = w.hover; $('wvScroll').checked = w.scrollBuild;
+  $('wvTiltAmt').value = w.tiltAmount; $('wvStart').value = w.buildStart; $('wvEnd').value = w.buildEnd; $('wvZoom').value = w.zoom;
+  $('wvTiltVal').textContent = w.tiltAmount + '\u00b0'; $('wvStartVal').textContent = w.buildStart + '% from top';
+  $('wvEndVal').textContent = w.buildEnd + '% from top'; $('wvZoomVal').textContent = w.zoom + '%';
+  $('wvSpinNote').textContent = `one turn every ${S.turnSecs} s`;
+  $('wvInertiaWrap').hidden = !w.drag; $('wvTiltRow').hidden = !w.tilt;
+  $('wvStartRow').hidden = $('wvEndRow').hidden = $('wvScrollNote').hidden = !w.scrollBuild;
+  store.set('tw.web', JSON.stringify(w));
+  if (f && f.__render) f.__render(w);
+}
+[['wvSpin', 'spin'], ['wvDrag', 'drag'], ['wvInertia', 'inertia'], ['wvTilt', 'tilt'], ['wvHover', 'hover'], ['wvScroll', 'scrollBuild']]
+  .forEach(([id, k]) => $(id).addEventListener('change', e => { S.web[k] = e.target.checked; wvSync(); }));
+[['wvTiltAmt', 'tiltAmount'], ['wvStart', 'buildStart'], ['wvEnd', 'buildEnd'], ['wvZoom', 'zoom']]
+  .forEach(([id, k]) => $(id).addEventListener('input', e => { S.web[k] = +e.target.value; wvSync(); }));
+function openPreview() {
+  if (!S.result) return;
+  const src = componentSource(), fr = $('wvFrame');
+  $('webview').hidden = false; wvSync();
+  fr.onload = () => {
+    const w = fr.contentWindow;
+    if (!w.React || !w.__boot) { toast('Couldn\u2019t load React for the preview. Check your connection.'); return; }
+    if (w.__boot(src)) w.__render(S.web);
+  };
+  fr.srcdoc = WV_PAGE;
+}
+const closePreview = () => { $('webview').hidden = true; $('wvFrame').srcdoc = ''; };
+$('webPreview').addEventListener('click', openPreview);
+$('wvClose').addEventListener('click', closePreview);
+$('wvTop').addEventListener('click', () => { const w = $('wvFrame').contentWindow; if (w) w.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('wvExport').addEventListener('click', () => $('exFramer').click());
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('webview').hidden) closePreview(); });
 $('exMp4').addEventListener('click', () => runExport('mp4'));
 syncClip();
 // ---------- panels ----------

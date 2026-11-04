@@ -3,7 +3,7 @@
 // workbench; this file only draws it. Drag to turn (with inertia), the sphere leans toward the cursor,
 // members light up under the cursor, and it can build itself as the page scrolls.
 // Add it in Framer: Assets > Code > New code file, paste this file, then drag the component onto the canvas.
-import { useEffect, useRef } from "react"
+import { createElement, useEffect, useRef } from "react"
 import { addPropertyControls, ControlType, RenderTarget } from "framer"
 
 // P: joints (x, y, z, centred, radius 1). M: members (a, b, 1 = strut / 0 = cable).
@@ -235,24 +235,28 @@ export default function TensegritySphere(props) {
     // redraw when a property changes while the loop is idle (Framer's editor, reduced motion)
     useEffect(() => { if (redraw.current) redraw.current() })
 
-    return (
-        <div ref={wrap} style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: props.background, ...props.style }}>
-            <canvas
-                ref={canvas}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", cursor: props.drag ? "grab" : "default", touchAction: props.drag ? "pan-y" : "auto" }}
-                aria-label={DATA ? DATA.name : "Tensegrity sphere"}
-                role="img"
-            />
-        </div>
+    // createElement rather than JSX, so the workbench can preview this exact file without a compiler
+    return createElement(
+        "div",
+        { ref: wrap, style: { position: "relative", width: "100%", height: "100%", overflow: "hidden", background: props.background, ...props.style } },
+        createElement("canvas", {
+            ref: canvas,
+            style: { position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", cursor: props.drag ? "grab" : "default", touchAction: props.drag ? "pan-y" : "auto" },
+            "aria-label": DATA ? DATA.name : "Tensegrity sphere",
+            role: "img",
+        })
     )
 }
 
 const S = (DATA && DATA.style) || {}
+const I = (DATA && DATA.interact) || {} // interaction settings chosen in the workbench preview
+const or = (v, d) => (v === undefined ? d : v)
 TensegritySphere.defaultProps = {
     background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#f2f0ea", cableColor: S.cable || "#9a9890",
-    highlightColor: S.highlight || "#f26a2c", spin: true, turnSeconds: S.turn || 35, drag: true, inertia: true,
-    tilt: true, tiltAmount: 8, hover: true, scrollBuild: true, buildStart: 95, buildEnd: 35,
-    depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: 100, strutWidth: 100,
+    highlightColor: S.highlight || "#f26a2c", spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
+    inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
+    scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
+    depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,
 }
 const D = TensegritySphere.defaultProps
 
