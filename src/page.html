@@ -431,6 +431,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <button class="btn" id="exPng">PNG still</button>
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
+      <button class="btn" id="exFramer" title="A Framer code component of this structure: drag to turn, cursor tilt, hover highlight, scroll build">Framer component (.tsx)</button>
       <div class="row"><span class="lbl">Motion</span><span class="val" id="clipInfo"></span></div>
       <div class="seg" role="radiogroup" aria-label="Clip">
         <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
@@ -478,6 +479,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 
+<script type="text/plain" id="framerSrc">/*FRAMER*/</script>
 <script id="tgsrc">
 /*SOLVER*/
 </script>
@@ -1402,7 +1404,7 @@ function syncClip() {
   $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
   $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
   $('gifRate').value = String(S.gifCs);
-  $('exPng').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
+  $('exPng').disabled = $('exFramer').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
 }
 document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener('change', () => { S.clip = r.value; store.set('tw.clip', S.clip); syncClip(); }));
 $('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });
@@ -1559,6 +1561,32 @@ async function encodeMp4(Mp4Muxer, plan, c, cx, frame, fps) {
   return new Blob([muxer.target.buffer], { type: 'video/mp4' });
 }
 $('exGif').addEventListener('click', () => runExport('gif'));
+
+// Framer code component: the solved geometry, the build order and the current look, baked into
+// src/framer/TensegritySphere.tsx (inlined at build as #framerSrc). The site never runs the solver.
+function framerData() {
+  const r = S.result, md = S.model, c = centroid(r.P);
+  let R = 0; r.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
+  const r4 = v => Math.round(v * 1e4) / 1e4, r3 = v => Math.round(v * 1e3) / 1e3;
+  const P = []; r.P.forEach(p => P.push(r4((p[0] - c[0]) / R), r4((p[1] - c[1]) / R), r4((p[2] - c[2]) / R)));
+  const M = []; md.members.forEach(m => M.push(m.a, m.b, m.kind === 's' ? 1 : 0));
+  let pl = null; try { pl = makePlan(); } catch (e) { pl = null; }
+  const B = md.members.map((m, k) => {
+    if (!pl) return m.kind === 's' ? [0, 0.001, m.a, 1] : [0, 0.001, 0.001, m.a];
+    if (m.kind === 's') { const q = pl.st[k]; return [r3(q.start), r3(q.dur), q.from !== undefined ? q.from : m.a, q.mode === 'stroke' ? 0 : 1]; }
+    const q = pl.cab[k]; return [r3(q.start), r3(q.reveal), r3(q.settle), q.rev ? m.b : m.a];
+  });
+  let sl = 0, sn = 0; md.members.forEach((m, k) => { if (m.kind === 's') { sl += r.lengths[k]; sn++; } });
+  return { name: S.shown.name, P, M, B, end: pl ? r3(pl.end) : 0, strut: r4(sn ? sl / sn / R : 0.3),
+    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch) },
+    style: { background: exportFill() || 'rgba(0, 0, 0, 0)', strut: colors.strut, cable: colors.cable, highlight: colors.sel,
+      turn: S.turnSecs, shade: Math.round(S.shade * 100), cableOpacity: Math.round(Math.min(1, S.cable) * 100) } };
+}
+$('exFramer').addEventListener('click', () => {
+  if (!S.result || exporting) return;
+  const src = $('framerSrc').textContent.replace('/*DATA*/ null', JSON.stringify(framerData()));
+  offer('TensegritySphere.tsx', new Blob([src], { type: 'text/plain' }));
+});
 $('exMp4').addEventListener('click', () => runExport('mp4'));
 syncClip();
 // ---------- panels ----------
