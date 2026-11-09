@@ -43,6 +43,7 @@ export default function TensegritySphere(props) {
         const st = {
             yaw: DATA.view.yaw, pitch: DATA.view.pitch, vy: 0, vp: 0, // orbit and its inertia (rad/s)
             tx: 0, ty: 0, // cursor tilt, eased
+            sy: -1e9, // scroll rotation (rad), eased; -1e9: not measured yet
             mouse: null, drag: null, hover: -1,
             prog: onCanvas || reduce ? 1 : -1, // scroll build progress, eased (-1: not measured yet)
             visible: true, raf: 0, last: 0,
@@ -101,7 +102,7 @@ export default function TensegritySphere(props) {
             const p = live.current, W = cv.width, H = cv.height, d = window.devicePixelRatio || 1
             ctx.clearRect(0, 0, W, H)
             const s = Math.min(W, H) * 0.4 * (p.zoom / 100)
-            project(st.yaw + st.tx, st.pitch + st.ty, s, W, H)
+            project(st.yaw + st.tx + (p.scrollRotate && st.sy > -1e8 ? st.sy : 0), st.pitch + st.ty, s, W, H)
             let zmin = Infinity, zmax = -Infinity
             for (let i = 0; i < nP; i++) { const z = proj[3 * i + 2]; if (z < zmin) zmin = z; if (z > zmax) zmax = z }
             const t = (p.scrollBuild ? Math.max(0, st.prog) : 1) * DATA.end
@@ -167,7 +168,7 @@ export default function TensegritySphere(props) {
                     st.yaw += st.vy * dt; st.pitch += st.vp * dt
                     const f = Math.exp(-dt * 2.2); st.vy *= f; st.vp *= f
                 }
-                if (p.spin) st.yaw += (TAU / Math.max(1, p.turnSeconds)) * dt
+                if (p.spin && !p.scrollRotate) st.yaw += (TAU / Math.max(1, p.turnSeconds)) * dt
                 st.pitch += (DATA.view.pitch - st.pitch) * (1 - Math.exp(-dt * 0.6)) // drift back to the set angle
             }
             // lean toward the cursor, wherever it is on the page
@@ -178,6 +179,11 @@ export default function TensegritySphere(props) {
                 ty = Math.max(-1, Math.min(1, (st.mouse[1] - (r.top + r.height / 2)) / (window.innerHeight / 2 || 1))) * k
             }
             const e = 1 - Math.exp(-dt * 4)
+            // rotate on scroll: page scroll turns the structure, so many degrees per screen height, eased
+            if (p.scrollRotate) {
+                const target = (((window.scrollY || 0) / (window.innerHeight || 1)) * p.scrollDegrees * Math.PI) / 180
+                st.sy = st.sy < -1e8 || !moving ? target : st.sy + (target - st.sy) * (1 - Math.exp(-dt * 7))
+            }
             st.tx += (tx - st.tx) * e; st.ty += (ty - st.ty) * e
             if (p.scrollBuild && moving) {
                 const target = scrollTarget(p)
@@ -252,8 +258,8 @@ const S = (DATA && DATA.style) || {}
 const I = (DATA && DATA.interact) || {} // interaction settings chosen in the workbench preview
 const or = (v, d) => (v === undefined ? d : v)
 TensegritySphere.defaultProps = {
-    background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#f2f0ea", cableColor: S.cable || "#9a9890",
-    highlightColor: S.highlight || "#f26a2c", spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
+    background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#e3dec9", cableColor: S.cable || "#e3dec9",
+    highlightColor: S.highlight || "#ff4e02", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
     inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
     scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
     depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,
@@ -265,8 +271,10 @@ addPropertyControls(TensegritySphere, {
     strutColor: { type: ControlType.Color, title: "Struts", defaultValue: D.strutColor },
     cableColor: { type: ControlType.Color, title: "Cables", defaultValue: D.cableColor },
     highlightColor: { type: ControlType.Color, title: "Highlight", defaultValue: D.highlightColor },
-    spin: { type: ControlType.Boolean, title: "Spin", defaultValue: D.spin },
-    turnSeconds: { type: ControlType.Number, title: "Turn time", min: 4, max: 120, step: 1, unit: "s", defaultValue: D.turnSeconds, hidden: (p) => !p.spin },
+    scrollRotate: { type: ControlType.Boolean, title: "Rotate on scroll", defaultValue: D.scrollRotate },
+    scrollDegrees: { type: ControlType.Number, title: "Per screen", min: -360, max: 360, step: 5, unit: "\u00b0", defaultValue: D.scrollDegrees, description: "How far it turns for each screen height scrolled. Negative turns the other way.", hidden: (p) => !p.scrollRotate },
+    spin: { type: ControlType.Boolean, title: "Spin", defaultValue: D.spin, hidden: (p) => p.scrollRotate },
+    turnSeconds: { type: ControlType.Number, title: "Turn time", min: 4, max: 120, step: 1, unit: "s", defaultValue: D.turnSeconds, hidden: (p) => !p.spin || p.scrollRotate },
     drag: { type: ControlType.Boolean, title: "Drag to turn", defaultValue: D.drag },
     inertia: { type: ControlType.Boolean, title: "Inertia", defaultValue: D.inertia, hidden: (p) => !p.drag },
     tilt: { type: ControlType.Boolean, title: "Cursor tilt", defaultValue: D.tilt },
