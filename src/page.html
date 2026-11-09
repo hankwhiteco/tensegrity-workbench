@@ -459,6 +459,12 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           <label class="check"><input type="checkbox" id="iconBack" checked><span>Back lines</span></label>
         </div>
       </div>
+      <div class="seg three" role="radiogroup" aria-label="Icon motion">
+        <input type="radio" name="iconMotion" id="im_still" value="still" checked><label for="im_still">Still</label>
+        <input type="radio" name="iconMotion" id="im_rock" value="rock"><label for="im_rock">Rock<small>swings, shows depth</small></label>
+        <input type="radio" name="iconMotion" id="im_turn" value="turn"><label for="im_turn">Turn<small>full revolution</small></label>
+      </div>
+      <div class="row" id="iconLoopRow" hidden><label for="iconLoop">Loop</label><span class="val" id="iconLoopVal"></span><input type="range" id="iconLoop" min="2" max="20" step="0.5" value="6"></div>
       <button class="btn" id="exIcon">Icon (SVG)</button>
       <div class="row"><span class="lbl">Motion</span><span class="val" id="clipInfo"></span></div>
       <div class="seg" role="radiogroup" aria-label="Clip">
@@ -1702,51 +1708,77 @@ function iconViews() { // rebuild the view menu for this structure, keeping the 
     symmetryAxes().map(x => `<option value="ax${x.n}">${x.n}-fold axis</option>`).join('');
   sel.value = [...sel.options].some(o => o.value === want) ? want : 'shown';
 }
-function iconSVG() {
-  if (!S.result) return null;
-  const P = S.result.P, md = S.model, c = centroid(P), view = $('iconView').value;
-  // u, w: the drawing's x and up directions; v: toward the viewer
-  let u, w, v;
+// Motion (optional): Rock swings the structure to and fro about the drawing's vertical (up to 28 degrees
+// each way), Turn spins it a full revolution about it, so the flat lines show the shape's depth. Exported
+// as an animated SVG: the same single path, its d animated through keyframes (SMIL, loops forever).
+// Every member is kept in every frame, so all keyframes share one command list and blend smoothly.
+const ICON_ROCK = 28 * Math.PI / 180, ICON_KEYS = { rock: 40, turn: 72 };
+function iconBasis() {
+  const view = $('iconView').value;
   if (view === 'shown') {
     const cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
-    u = [cy, -sy, 0]; w = [sp * sy, sp * cy, cp]; v = [-cp * sy, -cp * cy, sp];
-  } else {
-    const ax = symmetryAxes().find(x => 'ax' + x.n === view);
-    v = view === 'top' ? [0, 0, 1] : view === 'front' ? [0, -1, 0] : ax ? ax.a : [0, 0, 1];
-    const ref = Math.abs(v[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
-    u = norm3([ref[1] * v[2] - ref[2] * v[1], ref[2] * v[0] - ref[0] * v[2], ref[0] * v[1] - ref[1] * v[0]]);
-    w = [v[1] * u[2] - v[2] * u[1], v[2] * u[0] - v[0] * u[2], v[0] * u[1] - v[1] * u[0]];
+    return { u: [cy, -sy, 0], w: [sp * sy, sp * cy, cp], v: [-cp * sy, -cp * cy, sp] };
   }
-  const Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w), dot3(d, v)]; });
-  let R = 0; Q.forEach(q => R = Math.max(R, Math.hypot(q[0], q[1])));
-  const k = 21 / (R || 1), f = x => Math.round(x * 100) / 100; // 3 px margin on a 48 grid
-  const seen = new Set(), segs = [];
-  md.members.forEach(m => {
-    if (m.kind !== 's' && !$('iconCables').checked) return;
-    const a = Q[m.a], b = Q[m.b];
-    if (!$('iconBack').checked && a[2] + b[2] < 0) return; // back half: midpoint away from the viewer
-    const A = [f(24 + a[0] * k), f(24 - a[1] * k)], B = [f(24 + b[0] * k), f(24 - b[1] * k)];
-    if (A[0] === B[0] && A[1] === B[1]) return; // seen end on
-    const key = [A.join(','), B.join(',')].sort().join(' ');
-    if (seen.has(key)) return; // lines that land on each other are drawn once
-    seen.add(key); segs.push(`M${A[0]} ${A[1]}L${B[0]} ${B[1]}`);
-  });
-  const sw = $('iconStroke').value;
-  return { lines: segs.length, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"><path d="${segs.join('')}"/></svg>` };
+  const ax = symmetryAxes().find(x => 'ax' + x.n === view);
+  const v = view === 'top' ? [0, 0, 1] : view === 'front' ? [0, -1, 0] : ax ? ax.a : [0, 0, 1];
+  const ref = Math.abs(v[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
+  const u = norm3([ref[1] * v[2] - ref[2] * v[1], ref[2] * v[0] - ref[0] * v[2], ref[0] * v[1] - ref[1] * v[0]]);
+  return { u, v, w: [v[1] * u[2] - v[2] * u[1], v[2] * u[0] - v[0] * u[2], v[0] * u[1] - v[1] * u[0]] };
+}
+const iconMotion = () => document.querySelector('input[name="iconMotion"]:checked').value;
+function iconSVG() {
+  if (!S.result) return null;
+  const P = S.result.P, md = S.model, c = centroid(P), { u, v, w } = iconBasis(), motion = iconMotion();
+  const D = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w), dot3(d, v)]; }); // x, up, toward the viewer
+  const f = x => Math.round(x * 100) / 100;
+  const cables = $('iconCables').checked, members = md.members.filter(m => m.kind === 's' || cables);
+  const head = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="${$('iconStroke').value}" stroke-linecap="round" stroke-linejoin="round">`;
+  if (motion === 'still') {
+    let R = 0; D.forEach(q => R = Math.max(R, Math.hypot(q[0], q[1])));
+    const k = 21 / (R || 1); // 3 px margin on a 48 grid
+    const seen = new Set(), segs = [];
+    members.forEach(m => {
+      const a = D[m.a], b = D[m.b];
+      if (!$('iconBack').checked && a[2] + b[2] < 0) return; // back half: midpoint away from the viewer
+      const A = [f(24 + a[0] * k), f(24 - a[1] * k)], B = [f(24 + b[0] * k), f(24 - b[1] * k)];
+      if (A[0] === B[0] && A[1] === B[1]) return; // seen end on
+      const key = [A.join(','), B.join(',')].sort().join(' ');
+      if (seen.has(key)) return; // lines that land on each other are drawn once
+      seen.add(key); segs.push(`M${A[0]} ${A[1]}L${B[0]} ${B[1]}`);
+    });
+    return { lines: segs.length, svg: `${head}<path d="${segs.join('')}"/></svg>` };
+  }
+  // animated: one scale for every frame, from the full 3D radius about the vertical, so nothing leaves the frame
+  let R = 0; D.forEach(q => R = Math.max(R, motion === 'turn' ? Math.hypot(q[0], q[2], q[1]) : Math.hypot(Math.abs(q[0]) + Math.abs(q[2]) * Math.sin(ICON_ROCK), q[1])));
+  const k = 21 / (R || 1), n = ICON_KEYS[motion], frames = [];
+  for (let i = 0; i <= n; i++) {
+    const th = motion === 'turn' ? 2 * Math.PI * i / n : ICON_ROCK * Math.sin(2 * Math.PI * i / n);
+    const C = Math.cos(th), Sn = Math.sin(th);
+    frames.push(members.map(m => { const a = D[m.a], b = D[m.b];
+      const ax = a[0] * C + a[2] * Sn, bx = b[0] * C + b[2] * Sn;
+      return `M${f(24 + ax * k)} ${f(24 - a[1] * k)}L${f(24 + bx * k)} ${f(24 - b[1] * k)}`; }).join(''));
+  }
+  const dur = +$('iconLoop').value;
+  return { lines: members.length, frames: n, svg: `${head}<path d="${frames[0]}"><animate attributeName="d" dur="${dur}s" repeatCount="indefinite" calcMode="linear" values="${frames.join(';')}"/></path></svg>` };
 }
 function iconSync() {
   if (!S.result) return;
   iconViews();
   const r = iconSVG(); if (!r) return;
-  $('iconPrev').innerHTML = r.svg; $('iconInfo').textContent = `${r.lines} lines`;
-  store.set('tw.icon', JSON.stringify({ view: $('iconView').value, stroke: $('iconStroke').value, cables: $('iconCables').checked, back: $('iconBack').checked }));
+  const motion = iconMotion();
+  if ($('iconPrev').dataset.svg !== r.svg) { $('iconPrev').innerHTML = r.svg; $('iconPrev').dataset.svg = r.svg; } // an unchanged animation keeps playing
+  $('iconInfo').textContent = motion === 'still' ? `${r.lines} lines` : `${r.lines} lines \u00b7 ${(r.svg.length / 1024).toFixed(0)} KB`;
+  $('iconLoopRow').hidden = motion === 'still'; $('iconLoopVal').textContent = `${$('iconLoop').value} s`;
+  $('iconBack').disabled = motion !== 'still'; // a moving icon shows every line
+  store.set('tw.icon', JSON.stringify({ view: $('iconView').value, stroke: $('iconStroke').value, cables: $('iconCables').checked, back: $('iconBack').checked, motion, loop: $('iconLoop').value }));
 }
-try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; } catch (e) {}
-['iconView', 'iconStroke', 'iconCables', 'iconBack'].forEach(id => $(id).addEventListener('change', () => { $('iconView').dataset.want = $('iconView').value; iconSync(); }));
-setInterval(() => { if ($('iconView').value === 'shown' && !document.hidden) iconSync(); }, 400); // follows the camera
+try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; if (o.motion) document.querySelector(`input[name="iconMotion"][value="${o.motion}"]`).checked = true; if (o.loop) $('iconLoop').value = o.loop; } catch (e) {}
+$('iconLoop').addEventListener('input', () => { $('iconLoopVal').textContent = `${$('iconLoop').value} s`; });
+['iconView', 'iconStroke', 'iconCables', 'iconBack', 'iconLoop', 'im_still', 'im_rock', 'im_turn'].forEach(id => $(id).addEventListener('change', () => { $('iconView').dataset.want = $('iconView').value; iconSync(); }));
+setInterval(() => { if ($('iconView').value === 'shown' && iconMotion() === 'still' && !document.hidden) iconSync(); }, 400); // follows the camera
 $('exIcon').addEventListener('click', () => {
   const r = iconSVG(); if (!r) return;
-  offer(`${baseName()}_icon_${$('iconView').value}.svg`, new Blob([r.svg], { type: 'image/svg+xml' }));
+  offer(`${baseName()}_icon_${$('iconView').value}${iconMotion() === 'still' ? '' : '_' + iconMotion()}.svg`, new Blob([r.svg], { type: 'image/svg+xml' }));
 });
 
 // Framer code component: the solved geometry, the build order and the current look, baked into
