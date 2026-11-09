@@ -562,9 +562,15 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
     <section>
       <h2>Motion clip</h2>
       <div class="row"><span class="lbl">Clip</span><span class="val" id="clipInfo"></span></div>
-      <div class="seg" role="radiogroup" aria-label="Clip">
-        <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
+      <div class="seg three" role="radiogroup" aria-label="Clip">
+        <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Turn<small>one full turn, loops</small></label>
+        <input type="radio" name="clip" id="clip_fly" value="fly"><label for="clip_fly">Fly through<small>in, hold, out, loops</small></label>
         <input type="radio" name="clip" id="clip_build" value="build"><label for="clip_build">Build<small>start to finish</small></label>
+      </div>
+      <div id="flyRows" hidden>
+        <div class="row"><label for="flyZoom">Fly in to</label><span class="val" id="flyZoomVal"></span><input type="range" id="flyZoom" min="2" max="40" step="1" value="20"></div>
+        <div class="row"><label for="flySecs">Fly time</label><span class="val" id="flySecsVal"></span><input type="range" id="flySecs" min="6" max="60" step="1" value="16"></div>
+        <div class="transport"><button class="btn grow" id="flyPreview">Preview in the view</button></div>
       </div>
       <div class="row">
         <label for="gifRate">GIF frame rate</label>
@@ -2004,7 +2010,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -2534,7 +2540,7 @@ function pick(mx, my) {
   return best;
 }
 let drag = null;
-cv.addEventListener('pointerdown', e => { if (exporting) return; drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { if (exporting) return; stopFly(); drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => {
   const b = cv.getBoundingClientRect();
   if (drag) {
@@ -2549,7 +2555,7 @@ cv.addEventListener('pointerup', e => {
   drag = null;
 });
 cv.addEventListener('pointerleave', () => { hover = -1; });
-cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S.view.zoom = Math.max(0.3, Math.min(40, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
+cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; stopFly(); S.view.zoom = Math.max(0.3, Math.min(40, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
 
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
@@ -2559,7 +2565,7 @@ function syncVE() {
   $('veAxWrap').hidden = $('veLoopWrap').hidden = !(S.ve && S.family === 'sphere');
   if (S.turnSecs) { const P = veCycle(), k = Math.round(S.turnSecs / P); $('veLoopNote').textContent = `one cycle every ${+P.toFixed(1)} s, ${k} per turn`; }
 }
-$('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; S.roll = 0; syncMotion(); };
+$('bReset').onclick = () => { if (exporting) return; stopFly(); S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; S.roll = 0; syncMotion(); };
 // motion controls (View > Motion), remembered as tw.motion
 function saveMotion() { store.set('tw.motion', JSON.stringify({ axis: S.axis, dir: S.dir, roll: S.roll, wobble: S.wobble, strutW: S.strutW })); }
 let axisMenuFor = null;
@@ -2933,9 +2939,18 @@ $('exPng').addEventListener('click', () => {
 });
 
 const BUILD_TAIL = 1.5; // seconds of the finished structure at the end of a build clip
+// Fly through: from the view's own zoom the camera eases in to Fly in to (30% of the time), holds there while the
+// structure keeps turning (40%), and eases back out (30%), on a log scale so the move feels even. The spin makes a
+// whole number of turns at about the Turn time, so the last frame leads back into the first.
+const flyTurns = T => Math.max(1, Math.round(T / S.turnSecs));
+function flyAt(u, z0) {
+  const a = 0.3, p = u < a ? ease(u / a) : u < 1 - a ? 1 : ease((1 - u) / a);
+  return { zoom: z0 * Math.pow(Math.max(S.flyZoom, z0) / z0, p), yaw: S.dir * 2 * Math.PI * flyTurns(S.flySecs) * u };
+}
 function clipPlan(kind, fps) {
   if (!S.result) return null;
   if (kind === 'turn') { const T = S.turnSecs; return { kind, T, n: Math.max(2, Math.round(T * fps)) }; }
+  if (kind === 'fly') { const T = S.flySecs; return { kind, T, n: Math.max(2, Math.round(T * fps)) }; }
   if (buildEnd === null) { try { buildEnd = makePlan().end; } catch (e) { return null; } }
   const veOn = S.ve && S.shown && S.shown.repeats; // the VE draws in after the sphere, in real time
   const T = buildEnd / ANIM.speed + BUILD_TAIL + (veOn ? VE_IN + 1 : 0);
@@ -2950,7 +2965,10 @@ function syncClip() {
   $('spinNote').textContent = `one turn every ${S.turnSecs} s, as exported`;
   $('exportBg').checked = S.exportBg;
   const p = clipPlan(S.clip, MP4_FPS);
-  $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360\u00b0 \u00b7 ${p.T} s` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
+  $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360\u00b0 \u00b7 ${p.T} s` : p.kind === 'fly' ? `${S.flyZoom}\u00d7 \u00b7 ${p.T} s \u00b7 ${flyTurns(p.T)} turn${flyTurns(p.T) > 1 ? 's' : ''}` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
+  $('flyRows').hidden = S.clip !== 'fly';
+  $('flyZoom').value = S.flyZoom; $('flyZoomVal').textContent = `${S.flyZoom}\u00d7 (${S.flyZoom >= 10 ? 'inside a sphere' : 'close'})`;
+  $('flySecs').value = S.flySecs; $('flySecsVal').textContent = `${S.flySecs} s`;
   $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
   $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
   $('gifRate').value = String(S.gifCs);
@@ -2960,7 +2978,19 @@ document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener(
 $('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });
 $('exportBg').addEventListener('change', e => { S.exportBg = e.target.checked; store.set('tw.exportBg', S.exportBg ? '1' : '0'); });
 { const t = parseInt(store.get('tw.turn')); if (t >= 4 && t <= 40) S.turnSecs = t; }
-S.clip = store.get('tw.clip') === 'build' ? 'build' : 'turn';
+S.clip = ['build', 'fly'].includes(store.get('tw.clip')) ? store.get('tw.clip') : 'turn';
+try { const fl = JSON.parse(store.get('tw.fly') || '{}'); if (fl.zoom >= 2 && fl.zoom <= 40) S.flyZoom = +fl.zoom; if (fl.secs >= 6 && fl.secs <= 60) S.flySecs = +fl.secs; } catch (e) {}
+const saveFly = () => store.set('tw.fly', JSON.stringify({ zoom: S.flyZoom, secs: S.flySecs }));
+$('flyZoom').addEventListener('input', e => { S.flyZoom = +e.target.value; saveFly(); syncClip(); });
+$('flySecs').addEventListener('input', e => { S.flySecs = +e.target.value; saveFly(); syncClip(); });
+// live preview of the fly path in the view (the export uses the same path)
+const FLY = { on: false, t: 0, z0: 1, yaw0: 0 };
+function stopFly() { if (!FLY.on) return; FLY.on = false; S.view.zoom = FLY.z0; $('flyPreview').textContent = 'Preview in the view'; }
+$('flyPreview').addEventListener('click', () => {
+  if (FLY.on) { stopFly(); return; }
+  if (!S.result) return;
+  Object.assign(FLY, { on: true, t: 0, z0: S.view.zoom, yaw0: S.view.yaw }); $('flyPreview').textContent = 'Stop preview';
+});
 S.exportBg = store.get('tw.exportBg') !== '0';
 $('gifRate').addEventListener('change', e => { S.gifCs = +e.target.value; store.set('tw.gifCs', String(S.gifCs)); if (typeof iconSync === 'function') iconSync(); });
 { const g = parseInt(store.get('tw.gifCs')); if ([2, 3, 4, 5, 6, 8, 10].includes(g)) S.gifCs = g; }
@@ -3003,6 +3033,19 @@ function framer(plan, fps, size) {
       return { d, still: true, clean: true, base, veT: S.veLoop ? ve0 + u * plan.T : Math.max(ve0, VE_IN) };
     };
   }
+  if (plan.kind === 'fly') {
+    const yaw0 = S.view.yaw, z0 = S.view.zoom, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T, wob0 = WOB_T;
+    const wobCycles = S.wobble ? Math.max(1, Math.round(plan.T / (4 * Math.PI))) : 0;
+    const veSpan = S.veLoop ? veCycle() * Math.max(1, Math.round(plan.T / veCycle())) : 0; // whole VE cycles, so it loops
+    return i => {
+      const u = i / plan.n, f = flyAt(u, z0);
+      S.view.yaw = yaw0 + f.yaw; S.view.zoom = f.zoom;
+      if (wobCycles) WOB_T = wob0 + u * wobCycles * 4 * Math.PI;
+      let base;
+      if (gives) { const A = idlePose(t0 + u * plan.T), B = idlePose(t0 + u * plan.T - plan.T); base = A.map((p, k) => [0, 1, 2].map(j => p[j] * (1 - u) + B[k][j] * u)); }
+      return { d, still: true, clean: true, base, veT: S.veLoop ? ve0 + u * veSpan : Math.max(ve0, VE_IN) };
+    };
+  }
   beginBuild();
   return i => { if (i > 0) step(1 / fps, false); return { d, clean: true }; };
 }
@@ -3017,6 +3060,7 @@ async function runExport(kind) {
   if (!plan) return;
   const size = +$('motionSize').value;
   // everything a clip moves, so the view comes back exactly as it was
+  stopFly();
   const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, WOB_T, result: S.result,
     anim: { on: ANIM.on, playing: ANIM.playing, t: ANIM.t, plan: ANIM.plan, viewT: ANIM.viewT, viewFrom: ANIM.viewFrom, viewTo: ANIM.viewTo, endClock: ANIM.endClock } };
   exporting = { kind, cancel: false };
@@ -3476,6 +3520,10 @@ function step(dt, ui) {
     const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
     let dy = ((b.yaw - a.yaw) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
     S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
+  } else if (FLY.on) { // previewing the fly-through clip: its own zoom and turn, then back to where it began
+    FLY.t += dt; const u = FLY.t / S.flySecs;
+    if (u >= 1) { S.view.yaw = FLY.yaw0 + flyAt(1, FLY.z0).yaw; stopFly(); }
+    else { const f = flyAt(u, FLY.z0); S.view.zoom = f.zoom; S.view.yaw = FLY.yaw0 + f.yaw; }
   } else if (S.spin && !drag) S.view.yaw += S.dir * dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
   GIVE_T += dt; VE_T += dt; WOB_T += dt;
