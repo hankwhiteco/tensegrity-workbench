@@ -249,6 +249,12 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
          opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 5; }
 .toast.show { opacity: 1; }
 
+/* icon export: a flat single-stroke drawing with a live preview */
+.icon-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: start; }
+.icon-prev { width: 96px; height: 96px; border-radius: 3px; background: var(--well); color: var(--accent); display: grid; place-items: center; box-shadow: inset 0 -1px 0 var(--line); }
+.icon-prev svg { width: 80px; height: 80px; }
+.icon-opts { display: grid; gap: 6px; }
+.icon-opts select { height: 30px; }
 /* website preview: a mock page running the exported component, with its settings */
 .webview { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-columns: minmax(0, 1fr) 320px; background: var(--bg); }
 .wv-page { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 14px; padding: 22px 28px; min-width: 0; min-height: 0; }
@@ -441,6 +447,19 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <button class="btn" id="exPng">PNG still</button>
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
+      <div class="row"><span class="lbl">Icon</span><span class="val" id="iconInfo"></span></div>
+      <div class="icon-row">
+        <div class="icon-prev" id="iconPrev" aria-label="Icon preview"></div>
+        <div class="icon-opts">
+          <select id="iconView" aria-label="Icon view">
+            <option value="shown">As shown</option><option value="top">Top</option><option value="front">Front</option>
+          </select>
+          <select id="iconStroke" aria-label="Icon stroke"><option value="0.75">Stroke 0.75</option><option value="1" selected>Stroke 1</option><option value="1.5">Stroke 1.5</option><option value="2">Stroke 2</option></select>
+          <label class="check"><input type="checkbox" id="iconCables" checked><span>Cables</span></label>
+          <label class="check"><input type="checkbox" id="iconBack" checked><span>Back lines</span></label>
+        </div>
+      </div>
+      <button class="btn" id="exIcon">Icon (SVG)</button>
       <div class="row"><span class="lbl">Motion</span><span class="val" id="clipInfo"></span></div>
       <div class="seg" role="radiogroup" aria-label="Clip">
         <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
@@ -1888,7 +1907,7 @@ function solve() {
     saveGroupMem();
     if (S.sel >= md.members.length) S.sel = -1;
     if (ANIM.on) stopBuild();
-    fitView(); renderReport(); renderSel(); syncClip();
+    fitView(); renderReport(); renderSel(); syncClip(); iconSync();
     if (!ANIM.autoDone && S.shown.repeats && !reduce.matches) { ANIM.autoDone = true; startBuild(); }
   });
 }
@@ -2836,6 +2855,112 @@ async function encodeMp4(Mp4Muxer, plan, c, cx, frame, fps) {
   return new Blob([muxer.target.buffer], { type: 'video/mp4' });
 }
 $('exGif').addEventListener('click', () => runExport('gif'));
+
+// Icon (SVG): the structure as a flat drawing, every line one weight, no perspective and no depth
+// shading, for icons. One <path> on a 48 x 48 grid, stroke currentColor, round caps and joins.
+// Views: the current camera, or straight down a symmetry axis (the clean, symmetric ones).
+// The structure's own rotation axes. A rotation is fixed by where it sends one joint p0 and its nearest
+// neighbour p1, so every candidate pair (q0, q1) at the same radii and spacing gives one rotation; those
+// that send every joint onto a joint are symmetries. Each symmetry's axis and smallest turn give the
+// axis order. One axis per order (6, 5, 4, 3, 2) is offered.
+let iconAxes = { result: null, axes: [] };
+function symmetryAxes() {
+  if (iconAxes.result === S.result) return iconAxes.axes;
+  const c = centroid(S.result.P), P = S.result.P.map(p => sub3(p, c)), N = P.length;
+  let R = 0; P.forEach(p => R = Math.max(R, Math.hypot(...p)));
+  const tol = 2e-3 * R, cell = 4 * tol, grid = new Map(), kc = (x, y, z) => x + ',' + y + ',' + z;
+  P.forEach(p => { const k = kc(...p.map(v => Math.floor(v / cell))); (grid.get(k) || grid.set(k, []).get(k)).push(p); });
+  const has = q => { const b = q.map(v => Math.floor(v / cell));
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) for (const p of grid.get(kc(b[0] + i, b[1] + j, b[2] + k)) || [])
+      if (Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < tol) return true;
+    return false; };
+  const len = Math.hypot, frame = (p, q) => { // orthonormal frame from two points (rows)
+    const e1 = norm3(p), d = dot3(q, e1), e2 = norm3([q[0] - d * e1[0], q[1] - d * e1[1], q[2] - d * e1[2]]);
+    return [e1, e2, [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]]; };
+  // p0: a joint off the centre; p1: its nearest joint not in line with it through the centre
+  const i0 = P.findIndex(p => len(...p) > 0.2 * R); if (i0 < 0) return (iconAxes = { result: S.result, axes: [] }).axes;
+  const p0 = P[i0], r0 = len(...p0);
+  let i1 = -1, d1 = Infinity;
+  P.forEach((q, j) => { if (j === i0) return; const cr = len(...[p0[1] * q[2] - p0[2] * q[1], p0[2] * q[0] - p0[0] * q[2], p0[0] * q[1] - p0[1] * q[0]]);
+    const dd = len(q[0] - p0[0], q[1] - p0[1], q[2] - p0[2]); if (cr > 1e-3 * R * R && dd < d1) { d1 = dd; i1 = j; } });
+  if (i1 < 0) return (iconAxes = { result: S.result, axes: [] }).axes;
+  const p1 = P[i1], r1 = len(...p1), Fp = frame(p0, p1), best = new Map();
+  for (const q0 of P) {
+    if (Math.abs(len(...q0) - r0) > tol) continue;
+    for (const q1 of P) {
+      if (q1 === q0 || Math.abs(len(...q1) - r1) > tol || Math.abs(len(q1[0] - q0[0], q1[1] - q0[1], q1[2] - q0[2]) - d1) > tol) continue;
+      const Fq = frame(q0, q1), M = [];
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) M.push(Fq[0][i] * Fp[0][j] + Fq[1][i] * Fp[1][j] + Fq[2][i] * Fp[2][j]);
+      const { ax, ang } = axisAngle(M);
+      if (ang < 1e-3) continue; // the identity
+      const n = Math.round(2 * Math.PI / ang);
+      if (n < 2 || n > 6 || Math.abs(2 * Math.PI / n - ang) > 1e-3) continue;
+      const a = ax[2] < -1e-9 || (Math.abs(ax[2]) < 1e-9 && ax[0] < 0) ? ax.map(x => -x) : ax, key = a.map(x => Math.round(x * 500)).join(',');
+      if ((best.get(key) || { n: 0 }).n >= n) continue;
+      const rot = p => [M[0] * p[0] + M[1] * p[1] + M[2] * p[2], M[3] * p[0] + M[4] * p[1] + M[5] * p[2], M[6] * p[0] + M[7] * p[1] + M[8] * p[2]];
+      let ok = true;
+      for (let i = 0; i < Math.min(N, 10) && ok; i++) ok = has(rot(P[(i * 7919) % N])); // quick reject on a sample
+      if (ok && P.every(p => has(rot(p)))) best.set(key, { n, a });
+    }
+  }
+  const byOrder = {}; for (const x of best.values()) if (!byOrder[x.n]) byOrder[x.n] = x.a;
+  iconAxes = { result: S.result, axes: [6, 5, 4, 3, 2].filter(n => byOrder[n]).map(n => ({ n, a: byOrder[n] })) };
+  return iconAxes.axes;
+}
+let iconMenuFor = null;
+function iconViews() { // rebuild the view menu for this structure, keeping the choice when it still exists
+  if (iconMenuFor === S.result) return; iconMenuFor = S.result;
+  const sel = $('iconView'), want = sel.dataset.want || sel.value;
+  sel.innerHTML = '<option value="shown">As shown</option><option value="top">Top</option><option value="front">Front</option>' +
+    symmetryAxes().map(x => `<option value="ax${x.n}">${x.n}-fold axis</option>`).join('');
+  sel.value = [...sel.options].some(o => o.value === want) ? want : 'shown';
+}
+function iconSVG() {
+  if (!S.result) return null;
+  const P = S.result.P, md = S.model, c = centroid(P), view = $('iconView').value;
+  // u, w: the drawing's x and up directions; v: toward the viewer
+  let u, w, v;
+  if (view === 'shown') {
+    const cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
+    u = [cy, -sy, 0]; w = [sp * sy, sp * cy, cp]; v = [-cp * sy, -cp * cy, sp];
+  } else {
+    const ax = symmetryAxes().find(x => 'ax' + x.n === view);
+    v = view === 'top' ? [0, 0, 1] : view === 'front' ? [0, -1, 0] : ax ? ax.a : [0, 0, 1];
+    const ref = Math.abs(v[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
+    u = norm3([ref[1] * v[2] - ref[2] * v[1], ref[2] * v[0] - ref[0] * v[2], ref[0] * v[1] - ref[1] * v[0]]);
+    w = [v[1] * u[2] - v[2] * u[1], v[2] * u[0] - v[0] * u[2], v[0] * u[1] - v[1] * u[0]];
+  }
+  const Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w), dot3(d, v)]; });
+  let R = 0; Q.forEach(q => R = Math.max(R, Math.hypot(q[0], q[1])));
+  const k = 21 / (R || 1), f = x => Math.round(x * 100) / 100; // 3 px margin on a 48 grid
+  const seen = new Set(), segs = [];
+  md.members.forEach(m => {
+    if (m.kind !== 's' && !$('iconCables').checked) return;
+    const a = Q[m.a], b = Q[m.b];
+    if (!$('iconBack').checked && a[2] + b[2] < 0) return; // back half: midpoint away from the viewer
+    const A = [f(24 + a[0] * k), f(24 - a[1] * k)], B = [f(24 + b[0] * k), f(24 - b[1] * k)];
+    if (A[0] === B[0] && A[1] === B[1]) return; // seen end on
+    const key = [A.join(','), B.join(',')].sort().join(' ');
+    if (seen.has(key)) return; // lines that land on each other are drawn once
+    seen.add(key); segs.push(`M${A[0]} ${A[1]}L${B[0]} ${B[1]}`);
+  });
+  const sw = $('iconStroke').value;
+  return { lines: segs.length, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"><path d="${segs.join('')}"/></svg>` };
+}
+function iconSync() {
+  if (!S.result) return;
+  iconViews();
+  const r = iconSVG(); if (!r) return;
+  $('iconPrev').innerHTML = r.svg; $('iconInfo').textContent = `${r.lines} lines`;
+  store.set('tw.icon', JSON.stringify({ view: $('iconView').value, stroke: $('iconStroke').value, cables: $('iconCables').checked, back: $('iconBack').checked }));
+}
+try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; } catch (e) {}
+['iconView', 'iconStroke', 'iconCables', 'iconBack'].forEach(id => $(id).addEventListener('change', () => { $('iconView').dataset.want = $('iconView').value; iconSync(); }));
+setInterval(() => { if ($('iconView').value === 'shown' && !document.hidden) iconSync(); }, 400); // follows the camera
+$('exIcon').addEventListener('click', () => {
+  const r = iconSVG(); if (!r) return;
+  offer(`${baseName()}_icon_${$('iconView').value}.svg`, new Blob([r.svg], { type: 'image/svg+xml' }));
+});
 
 // Framer code component: the solved geometry, the build order and the current look, baked into
 // src/framer/TensegritySphere.tsx (inlined at build as #framerSrc). The site never runs the solver.
