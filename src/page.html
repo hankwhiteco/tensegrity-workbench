@@ -309,6 +309,14 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .colours input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 .colours input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 2px; }
 .colours input[type="color"]::-moz-color-swatch { border: 0; border-radius: 2px; }
+/* image inside */
+.inner-row { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.inner-thumb { width: 64px; height: 64px; border-radius: 50%; background: var(--well) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--line);
+               display: grid; place-items: center; text-align: center; font-size: 10px; line-height: 1.2; color: var(--muted); }
+.inner-thumb.has { color: transparent; }
+.inner-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+#innerOpts { display: grid; gap: 12px; }
+.board.drop-on { box-shadow: inset 0 0 0 2px var(--accent); }
 /* icon export: a flat single-stroke drawing with a live preview */
 .icon-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: start; }
 .icon-prev { width: 96px; height: 96px; border-radius: 3px; background: var(--well); color: var(--accent); display: grid; place-items: center; box-shadow: inset 0 -1px 0 var(--line); }
@@ -520,6 +528,25 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <input type="range" id="give2" min="0" max="300" value="100">
       </div>
       <p class="note">0% shading draws every line the same, near or far. Above 100%, cables blend toward the strut colour.</p>
+    </section>
+
+    <section>
+      <h2>Image inside</h2>
+      <div class="inner-row">
+        <div class="inner-thumb" id="innerThumb" title="Drop an image here or on the artboard">drop<br>image</div>
+        <div class="inner-btns">
+          <button class="btn sm" id="innerPick">Choose image…</button>
+          <button class="btn sm" id="innerRemove" hidden>Remove</button>
+          <input type="file" id="innerFile" accept="image/*" hidden>
+        </div>
+      </div>
+      <div id="innerOpts" hidden>
+        <div class="seg" role="group" aria-label="Image shape"><button id="innerCircle" aria-pressed="true">Circle</button><button id="innerSquare" aria-pressed="false">Square</button></div>
+        <div class="seg" role="group" aria-label="Image facing"><button id="innerFace" aria-pressed="true">Faces you<small>always flat to the view</small></button><button id="innerTurn" aria-pressed="false">Turns with it<small>a panel inside</small></button></div>
+        <div class="row"><label for="innerSize">Size</label><span class="val" id="innerSizeVal"></span><input type="range" id="innerSize" min="10" max="150" step="1" value="70"></div>
+        <div class="row"><label for="innerOp">Opacity</label><span class="val" id="innerOpVal"></span><input type="range" id="innerOp" min="10" max="100" step="1" value="100"></div>
+      </div>
+      <p class="note">Sits at the centre: struts behind it are hidden, struts in front cross over it. Included in every export.</p>
     </section>
 
     <section id="veSection">
@@ -790,7 +817,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -1163,7 +1190,9 @@ function draw(c = cv, cx = ctx, o = {}) {
   const zk = Math.max(0, Math.min(1, S.view.zoom * animZoom() - 1)), Dc = camD();
   const mf = maxForce();
   ctx.lineCap = 'round';
+  let innerDone = !INNER.img;
   for (const s of segs) {
+    if (!innerDone && s.z < 0) { drawInner(ctx, d); innerDone = true; } // the centre's depth: behind here is behind the image
     const depth = zmax > zmin ? (s.z - zmin) / (zmax - zmin) : 0.5; // 0 near, 1 far
     const alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * (isCable(s) ? Math.min(1, S.cable) : 1);
     const isS = s.m.kind === 's';
@@ -1201,6 +1230,7 @@ function draw(c = cv, cx = ctx, o = {}) {
     }
   }
   ctx.setLineDash([]); ctx.globalAlpha = 1;
+  if (!innerDone) drawInner(ctx, d);
   if (fr && fr.marks.length) { // joint markers
     ctx.strokeStyle = colors.strut; ctx.lineWidth = 0.8 * d;
     const rr = (fit.strut || 1) * 0.022;
@@ -1222,6 +1252,77 @@ function draw(c = cv, cx = ctx, o = {}) {
     P.forEach((p, i) => ctx.fillText(i, p[0] + 5 * d, p[1] - 5 * d));
   }
 }
+// Image inside: a picture at the structure's centre, drawn between the far and near members (draw() calls it at the
+// centre's depth). Faces you = flat to the view (screen right and up); Turns with it = a panel in the structure's own
+// frame through the spin axis, so it turns, foreshortens and shows its back. Circle or square, the image covering it.
+// The panel's corners are projected and the image is mapped with an affine transform (no perspective within it).
+const INNER = { img: null, url: '' };
+function drawInner(ctx, d) {
+  const im = INNER.img; if (!im || !S.result) return;
+  const c = fit.c, pc = project(c); if (pc[3] <= NEAR()) return;
+  let R = 0; S.result.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
+  const r = R * S.inner.size;
+  const X = S.inner.mode === 'face' ? viewBasis(true).u : unorient([1, 0, 0]), Y = S.inner.mode === 'face' ? viewBasis(true).w : unorient([0, 0, 1]);
+  const px = project(c.map((v, k) => v + X[k] * r)), pd = project(c.map((v, k) => v - Y[k] * r)); // +x, and down
+  if (px[3] <= NEAR() || pd[3] <= NEAR()) return;
+  const m = [px[0] - pc[0], px[1] - pc[1], pd[0] - pc[0], pd[1] - pc[1], pc[0], pc[1]]; // unit square [-1, 1] to the screen
+  const ar = im.naturalWidth / im.naturalHeight, w = ar > 1 ? 2 * ar : 2, h = ar > 1 ? 2 : 2 / ar; // cover the square
+  if (ctx.raw) { // the SVG stand-in: one group, clipped
+    const id = 'inner' + (ctx.uid = (ctx.uid || 0) + 1), f = x => Math.round(x * 1000) / 1000;
+    const clip = S.inner.shape === 'circle' ? '<circle cx="0" cy="0" r="1"/>' : '<rect x="-1" y="-1" width="2" height="2"/>';
+    ctx.raw(`<g transform="matrix(${m.map(f).join(' ')})"${S.inner.op < 1 ? ` opacity="${f(S.inner.op)}"` : ''}><clipPath id="${id}">${clip}</clipPath><image href="${INNER.url}" x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" preserveAspectRatio="none" clip-path="url(#${id})"/></g>`);
+    return;
+  }
+  ctx.save(); ctx.globalAlpha = S.inner.op;
+  ctx.setTransform(...m);
+  ctx.beginPath(); if (S.inner.shape === 'circle') ctx.arc(0, 0, 1, 0, 2 * Math.PI); else ctx.rect(-1, -1, 2, 2);
+  ctx.clip(); ctx.drawImage(im, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+function setInnerImage(url, save) {
+  const im = new Image();
+  im.onload = () => {
+    // keep it light: at most 1024 px on the long side, WebP (keeps transparency) or PNG
+    const k = Math.min(1, 1024 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    let small = c.toDataURL('image/webp', 0.9); if (!small.startsWith('data:image/webp')) small = c.toDataURL('image/png');
+    const fin = new Image(); fin.onload = () => { INNER.img = fin; INNER.url = small; syncInner(); }; fin.src = small;
+    if (save) { try { localStorage.setItem('tw.innerImg', small); } catch (e) { toast('Image is in use, but too big to remember after a reload.'); } }
+  };
+  im.onerror = () => toast('That file isn’t an image this browser can read.');
+  im.src = url;
+}
+function syncInner() {
+  const has = !!INNER.img;
+  $('innerThumb').style.backgroundImage = has ? `url("${INNER.url}")` : ''; $('innerThumb').classList.toggle('has', has);
+  $('innerThumb').style.borderRadius = S.inner.shape === 'circle' ? '50%' : '4px';
+  $('innerRemove').hidden = $('innerOpts').hidden = !has;
+  $('innerCircle').setAttribute('aria-pressed', String(S.inner.shape === 'circle')); $('innerSquare').setAttribute('aria-pressed', String(S.inner.shape !== 'circle'));
+  $('innerFace').setAttribute('aria-pressed', String(S.inner.mode === 'face')); $('innerTurn').setAttribute('aria-pressed', String(S.inner.mode !== 'face'));
+  $('innerSize').value = Math.round(S.inner.size * 100); $('innerSizeVal').textContent = Math.round(S.inner.size * 100) + '% of the radius';
+  $('innerOp').value = Math.round(S.inner.op * 100); $('innerOpVal').textContent = Math.round(S.inner.op * 100) + '%';
+  store.set('tw.inner', JSON.stringify(S.inner));
+}
+const takeFile = f => { if (!f || !/^image\//.test(f.type)) { toast('Drop an image file (PNG, JPEG, WebP, SVG…)'); return; } const r = new FileReader(); r.onload = () => setInnerImage(r.result, true); r.readAsDataURL(f); };
+$('innerPick').addEventListener('click', () => $('innerFile').click());
+$('innerFile').addEventListener('change', e => { takeFile(e.target.files[0]); e.target.value = ''; });
+$('innerRemove').addEventListener('click', () => { INNER.img = null; INNER.url = ''; try { localStorage.removeItem('tw.innerImg'); } catch (e) {} syncInner(); });
+$('innerCircle').addEventListener('click', () => { S.inner.shape = 'circle'; syncInner(); });
+$('innerSquare').addEventListener('click', () => { S.inner.shape = 'square'; syncInner(); });
+$('innerFace').addEventListener('click', () => { S.inner.mode = 'face'; syncInner(); });
+$('innerTurn').addEventListener('click', () => { S.inner.mode = 'turn'; syncInner(); });
+$('innerSize').addEventListener('input', e => { S.inner.size = +e.target.value / 100; syncInner(); });
+$('innerOp').addEventListener('input', e => { S.inner.op = +e.target.value / 100; syncInner(); });
+// drop an image anywhere on the artboard, or on the thumbnail
+for (const el of [$('board'), $('innerThumb')]) {
+  el.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); $('board').classList.add('drop-on'); } });
+  el.addEventListener('dragleave', () => $('board').classList.remove('drop-on'));
+  el.addEventListener('drop', e => { e.preventDefault(); $('board').classList.remove('drop-on'); takeFile(e.dataTransfer.files[0]); });
+}
+try { const o = JSON.parse(store.get('tw.inner') || '{}'); if (o.size >= 0.1 && o.size <= 1.5) S.inner.size = +o.size; if (o.op >= 0.1 && o.op <= 1) S.inner.op = +o.op;
+  if (o.shape === 'square') S.inner.shape = 'square'; if (o.mode === 'turn') S.inner.mode = 'turn'; } catch (e) {}
+{ const saved = store.get('tw.innerImg'); if (saved && saved.startsWith('data:image/')) setInnerImage(saved, false); else syncInner(); }
+
 // Vector equilibrium overlay (spheres): Fuller's VE is four great circles whose axes run through its
 // opposite triangular faces. Those four face-to-face axes of spin are the cube diagonals (1, 1, 1) and its
 // sign flips, which are four of the sphere's three-fold axes (every sphere size is built symmetric about
@@ -1726,6 +1827,7 @@ function svgContext(W, H) {
     get font() { return st.font; }, set font(v) { st.font = v; },
     lineJoin: 'miter',
     save() { stack.push({ ...st, dash: st.dash.slice() }); }, restore() { if (stack.length) st = stack.pop(); },
+    raw(str) { out.push(str); }, rect(x, y, w, h) { d += `M${f(x)} ${f(y)}h${f(w)}v${f(h)}h${f(-w)}Z`; },
     setLineDash(a) { st.dash = a.slice(); },
     beginPath() { d = ''; }, closePath() { d += 'Z'; },
     moveTo(x, y) { d += `M${f(x)} ${f(y)}`; }, lineTo(x, y) { d += `L${f(x)} ${f(y)}`; },
