@@ -575,15 +575,25 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
   <div class="wv-page">
     <div class="masthead">
       <div class="brand"><span class="grille" aria-hidden="true"></span><h1>Website preview</h1></div>
-      <span class="hint">Scroll the page to build it &#xb7; drag to turn &#xb7; hover a member &#xb7; move the mouse to tilt</span>
+      <span class="hint">Scroll the page &#xb7; drag to turn &#xb7; hover a member &#xb7; move the mouse to tilt</span>
     </div>
     <iframe id="wvFrame" title="Mock web page with the tensegrity component"></iframe>
   </div>
   <aside class="panel wv-panel">
     <section>
+      <h2>Mock page</h2>
+      <div class="seg" role="radiogroup" aria-label="Mock page layout">
+        <input type="radio" name="wvPage" id="wvPage_short" value="short" checked><label for="wvPage_short">Short<small>hero, then the structure</small></label>
+        <input type="radio" name="wvPage" id="wvPage_long" value="long"><label for="wvPage_long">Long<small>pinned beside a story</small></label>
+      </div>
+    </section>
+    <section>
       <h2>Interaction</h2>
       <div class="layers">
-        <label class="layer"><input type="checkbox" id="wvSpin">
+        <label class="layer" data-accent><input type="checkbox" id="wvRot">
+          <svg viewBox="0 0 34 22"><rect x="2" y="3" width="9" height="16" rx="4.5" stroke-width="1.2"/><path d="M6.5 7 V10" stroke-width="1.4"/><path d="M17 11 A8 6 0 1 0 25 5" stroke-width="1.3"/><path d="M22.5 2.8 L25.4 5 L22.6 7.4" stroke-width="1.3"/></svg>
+          <span class="meta"><span class="name">Rotate on scroll</span><span class="count">scrolling turns it, back turns it back</span></span><span class="sw"></span></label>
+        <label class="layer" id="wvSpinWrap"><input type="checkbox" id="wvSpin">
           <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
           <span class="meta"><span class="name">Spin</span><span class="count" id="wvSpinNote"></span></span><span class="sw"></span></label>
         <label class="layer"><input type="checkbox" id="wvDrag">
@@ -602,6 +612,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           <svg viewBox="0 0 34 22"><rect x="11" y="2" width="12" height="18" rx="6" stroke-width="1.2"/><path d="M17 6 V10" stroke-width="1.4"/></svg>
           <span class="meta"><span class="name">Scroll build</span><span class="count">builds as it comes into view</span></span><span class="sw"></span></label>
       </div>
+      <div class="row" id="wvRotRow"><label for="wvRotDeg">Turn per screen</label><span class="val" id="wvRotVal"></span><input type="range" id="wvRotDeg" min="-360" max="360" step="5"></div>
       <div class="row" id="wvTiltRow"><label for="wvTiltAmt">Tilt</label><span class="val" id="wvTiltVal"></span><input type="range" id="wvTiltAmt" min="0" max="30" step="1"></div>
       <div class="row" id="wvStartRow"><label for="wvStart">Starts at</label><span class="val" id="wvStartVal"></span><input type="range" id="wvStart" min="0" max="100" step="1"></div>
       <div class="row" id="wvEndRow"><label for="wvEnd">Ends at</label><span class="val" id="wvEndVal"></span><input type="range" id="wvEnd" min="0" max="100" step="1"></div>
@@ -663,6 +674,7 @@ export default function TensegritySphere(props) {
         const st = {
             yaw: DATA.view.yaw, pitch: DATA.view.pitch, vy: 0, vp: 0, // orbit and its inertia (rad/s)
             tx: 0, ty: 0, // cursor tilt, eased
+            sy: -1e9, // scroll rotation (rad), eased; -1e9: not measured yet
             mouse: null, drag: null, hover: -1,
             prog: onCanvas || reduce ? 1 : -1, // scroll build progress, eased (-1: not measured yet)
             visible: true, raf: 0, last: 0,
@@ -721,7 +733,7 @@ export default function TensegritySphere(props) {
             const p = live.current, W = cv.width, H = cv.height, d = window.devicePixelRatio || 1
             ctx.clearRect(0, 0, W, H)
             const s = Math.min(W, H) * 0.4 * (p.zoom / 100)
-            project(st.yaw + st.tx, st.pitch + st.ty, s, W, H)
+            project(st.yaw + st.tx + (p.scrollRotate && st.sy > -1e8 ? st.sy : 0), st.pitch + st.ty, s, W, H)
             let zmin = Infinity, zmax = -Infinity
             for (let i = 0; i < nP; i++) { const z = proj[3 * i + 2]; if (z < zmin) zmin = z; if (z > zmax) zmax = z }
             const t = (p.scrollBuild ? Math.max(0, st.prog) : 1) * DATA.end
@@ -787,7 +799,7 @@ export default function TensegritySphere(props) {
                     st.yaw += st.vy * dt; st.pitch += st.vp * dt
                     const f = Math.exp(-dt * 2.2); st.vy *= f; st.vp *= f
                 }
-                if (p.spin) st.yaw += (TAU / Math.max(1, p.turnSeconds)) * dt
+                if (p.spin && !p.scrollRotate) st.yaw += (TAU / Math.max(1, p.turnSeconds)) * dt
                 st.pitch += (DATA.view.pitch - st.pitch) * (1 - Math.exp(-dt * 0.6)) // drift back to the set angle
             }
             // lean toward the cursor, wherever it is on the page
@@ -798,6 +810,11 @@ export default function TensegritySphere(props) {
                 ty = Math.max(-1, Math.min(1, (st.mouse[1] - (r.top + r.height / 2)) / (window.innerHeight / 2 || 1))) * k
             }
             const e = 1 - Math.exp(-dt * 4)
+            // rotate on scroll: page scroll turns the structure, so many degrees per screen height, eased
+            if (p.scrollRotate) {
+                const target = (((window.scrollY || 0) / (window.innerHeight || 1)) * p.scrollDegrees * Math.PI) / 180
+                st.sy = st.sy < -1e8 || !moving ? target : st.sy + (target - st.sy) * (1 - Math.exp(-dt * 7))
+            }
             st.tx += (tx - st.tx) * e; st.ty += (ty - st.ty) * e
             if (p.scrollBuild && moving) {
                 const target = scrollTarget(p)
@@ -873,7 +890,7 @@ const I = (DATA && DATA.interact) || {} // interaction settings chosen in the wo
 const or = (v, d) => (v === undefined ? d : v)
 TensegritySphere.defaultProps = {
     background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#f2f0ea", cableColor: S.cable || "#9a9890",
-    highlightColor: S.highlight || "#f26a2c", spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
+    highlightColor: S.highlight || "#f26a2c", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
     inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
     scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
     depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,
@@ -885,8 +902,10 @@ addPropertyControls(TensegritySphere, {
     strutColor: { type: ControlType.Color, title: "Struts", defaultValue: D.strutColor },
     cableColor: { type: ControlType.Color, title: "Cables", defaultValue: D.cableColor },
     highlightColor: { type: ControlType.Color, title: "Highlight", defaultValue: D.highlightColor },
-    spin: { type: ControlType.Boolean, title: "Spin", defaultValue: D.spin },
-    turnSeconds: { type: ControlType.Number, title: "Turn time", min: 4, max: 120, step: 1, unit: "s", defaultValue: D.turnSeconds, hidden: (p) => !p.spin },
+    scrollRotate: { type: ControlType.Boolean, title: "Rotate on scroll", defaultValue: D.scrollRotate },
+    scrollDegrees: { type: ControlType.Number, title: "Per screen", min: -360, max: 360, step: 5, unit: "\u00b0", defaultValue: D.scrollDegrees, description: "How far it turns for each screen height scrolled. Negative turns the other way.", hidden: (p) => !p.scrollRotate },
+    spin: { type: ControlType.Boolean, title: "Spin", defaultValue: D.spin, hidden: (p) => p.scrollRotate },
+    turnSeconds: { type: ControlType.Number, title: "Turn time", min: 4, max: 120, step: 1, unit: "s", defaultValue: D.turnSeconds, hidden: (p) => !p.spin || p.scrollRotate },
     drag: { type: ControlType.Boolean, title: "Drag to turn", defaultValue: D.drag },
     inertia: { type: ControlType.Boolean, title: "Inertia", defaultValue: D.inertia, hidden: (p) => !p.drag },
     tilt: { type: ControlType.Boolean, title: "Cursor tilt", defaultValue: D.tilt },
@@ -3129,11 +3148,11 @@ $('exFramer').addEventListener('click', () => {
 // Website preview: a mock page that runs the exact exported component (React 18 from unpkg, a small
 // stand-in for the "framer" module), with its interaction settings beside it. The settings are
 // remembered and baked into the export as the component's defaults (DATA.interact).
-const WEB_DEFAULT = { spin: true, drag: true, inertia: true, tilt: true, tiltAmount: 8, hover: true, scrollBuild: true, buildStart: 95, buildEnd: 35, zoom: 100 };
+const WEB_DEFAULT = { scrollRotate: false, scrollDegrees: 90, page: 'short', spin: true, drag: true, inertia: true, tilt: true, tiltAmount: 8, hover: true, scrollBuild: true, buildStart: 95, buildEnd: 35, zoom: 100 };
 S.web = { ...WEB_DEFAULT };
 try { Object.assign(S.web, JSON.parse(store.get('tw.web') || '{}')); } catch (e) {}
 const componentSource = () => $('framerSrc').textContent.replace('/*DATA*/ null', JSON.stringify(framerData()));
-const WV_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const wvPage = layout => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   html, body { margin: 0; background: #0c0c0b; color: #e8e6e0; font: 15px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; }
   nav { display: flex; gap: 24px; align-items: center; padding: 22px 6vw; color: #8d8b85; font-size: 13px; }
@@ -3146,11 +3165,21 @@ const WV_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="vi
   .copy { padding: 18vh 6vw 60vh; display: grid; gap: 14px; max-width: 640px; margin: 0 auto; }
   .bar { height: 12px; border-radius: 3px; background: #1f1f1e; }
   .err { padding: 40px 6vw; color: #ef6d62; }
+  .story { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 4vw; padding: 0 6vw; }
+  .story article { min-height: 86vh; display: grid; align-content: center; gap: 12px; max-width: 34ch; }
+  .story .no { color: #f26a2c; font-size: 12px; letter-spacing: .08em; }
+  .story h2 { font-weight: 300; font-size: clamp(24px, 3.4vw, 40px); margin: 0; }
+  .story p { color: #8d8b85; margin: 0; }
+  .pin { position: sticky; top: 7vh; height: 86vh; display: grid; place-items: center; }
+  .pin #stage { width: min(86vh, 100%); }
+  @media (max-width: 640px) { .story { grid-template-columns: 1fr; } .pin { grid-row: 1; height: 60vh; top: 0; z-index: 1; } .pin #stage { width: min(60vh, 100%); } }
 </style></head><body>
 <nav><b>Studio</b><span>Work</span><span>About</span><span>Contact</span></nav>
-<section class="hero"><h1>Structures held in tension</h1><p>A mock page for trying the component. Scroll down to build it.</p><span class="cue">Scroll &darr;</span></section>
+${layout === 'long' ? `<section class="hero"><h1>Structures held in tension</h1><p>A long mock page. Scroll and the structure turns with you.</p><span class="cue">Scroll &darr;</span></section>
+<div class="story"><div class="chapters"><article><span class="no">01</span><h2>Compression</h2><p>Struts push outward and never touch. Each one floats in the web around it.</p></article><article><span class="no">02</span><h2>Tension</h2><p>Cables only pull. Shorten one and the whole shape answers.</p></article><article><span class="no">03</span><h2>Prestress</h2><p>Nothing hangs slack. It holds because it is already pulling against itself.</p></article><article><span class="no">04</span><h2>Symmetry</h2><p>One small piece, repeated round the axes of an icosahedron.</p></article><article><span class="no">05</span><h2>Balance</h2><p>Every joint in equilibrium, every cable taut, every strut in compression.</p></article></div><div class="pin"><div id="stage"></div></div></div>
+<div class="copy">` : `<section class="hero"><h1>Structures held in tension</h1><p>A mock page for trying the component. Scroll down to build it.</p><span class="cue">Scroll &darr;</span></section>
 <div id="stage"></div>
-<div class="copy"><div class="bar" style="width:62%"></div><div class="bar"></div><div class="bar" style="width:88%"></div><div class="bar" style="width:40%"></div></div>
+<div class="copy">`}<div class="bar" style="width:62%"></div><div class="bar"></div><div class="bar" style="width:88%"></div><div class="bar" style="width:40%"></div></div>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"><\/script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>
 <script>
@@ -3169,6 +3198,9 @@ const WV_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="vi
 <\/script><\/body><\/html>`; // closing tags escaped: the tests inject their probe before the page's first body end tag
 function wvSync() {
   const w = S.web, f = $('wvFrame').contentWindow;
+  $('wvRot').checked = w.scrollRotate; $('wvRotDeg').value = w.scrollDegrees; $('wvRotVal').textContent = w.scrollDegrees + '\u00b0';
+  $('wvRotRow').hidden = !w.scrollRotate; $('wvSpinWrap').hidden = w.scrollRotate; // scroll drives the turn, so no auto-spin
+  document.querySelector(`input[name="wvPage"][value="${w.page}"]`).checked = true;
   $('wvSpin').checked = w.spin; $('wvDrag').checked = w.drag; $('wvInertia').checked = w.inertia; $('wvTilt').checked = w.tilt;
   $('wvHover').checked = w.hover; $('wvScroll').checked = w.scrollBuild;
   $('wvTiltAmt').value = w.tiltAmount; $('wvStart').value = w.buildStart; $('wvEnd').value = w.buildEnd; $('wvZoom').value = w.zoom;
@@ -3180,21 +3212,27 @@ function wvSync() {
   store.set('tw.web', JSON.stringify(w));
   if (f && f.__render) f.__render(w);
 }
-[['wvSpin', 'spin'], ['wvDrag', 'drag'], ['wvInertia', 'inertia'], ['wvTilt', 'tilt'], ['wvHover', 'hover'], ['wvScroll', 'scrollBuild']]
+[['wvRot', 'scrollRotate'], ['wvSpin', 'spin'], ['wvDrag', 'drag'], ['wvInertia', 'inertia'], ['wvTilt', 'tilt'], ['wvHover', 'hover'], ['wvScroll', 'scrollBuild']]
   .forEach(([id, k]) => $(id).addEventListener('change', e => { S.web[k] = e.target.checked; wvSync(); }));
-[['wvTiltAmt', 'tiltAmount'], ['wvStart', 'buildStart'], ['wvEnd', 'buildEnd'], ['wvZoom', 'zoom']]
+[['wvRotDeg', 'scrollDegrees'], ['wvTiltAmt', 'tiltAmount'], ['wvStart', 'buildStart'], ['wvEnd', 'buildEnd'], ['wvZoom', 'zoom']]
   .forEach(([id, k]) => $(id).addEventListener('input', e => { S.web[k] = +e.target.value; wvSync(); }));
-function openPreview() {
-  if (!S.result) return;
+function loadPreviewPage() {
   const src = componentSource(), fr = $('wvFrame');
-  $('webview').hidden = false; wvSync();
   fr.onload = () => {
     const w = fr.contentWindow;
     if (!w.React || !w.__boot) { toast('Couldn\u2019t load React for the preview. Check your connection.'); return; }
     if (w.__boot(src)) w.__render(S.web);
   };
-  fr.srcdoc = WV_PAGE;
+  fr.srcdoc = wvPage(S.web.page);
 }
+function openPreview() {
+  if (!S.result) return;
+  $('webview').hidden = false; wvSync(); loadPreviewPage();
+}
+// the long page is for trying rotate on scroll, so choosing it turns that on (it can be switched off again)
+document.querySelectorAll('input[name="wvPage"]').forEach(r => r.addEventListener('change', () => {
+  S.web.page = r.value; if (r.value === 'long') S.web.scrollRotate = true; wvSync(); loadPreviewPage();
+}));
 const closePreview = () => { $('webview').hidden = true; $('wvFrame').srcdoc = ''; };
 $('webPreview').addEventListener('click', openPreview);
 $('wvClose').addEventListener('click', closePreview);
