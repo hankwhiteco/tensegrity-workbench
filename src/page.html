@@ -342,7 +342,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
   <main class="stage">
     <div class="masthead">
       <div class="brand"><span class="grille" aria-hidden="true"></span><h1>Tensegrity Workbench</h1></div>
-      <span class="hint">Drag to turn · scroll to zoom · click a member to set it</span>
+      <span class="hint">Drag to turn · scroll to zoom, keep going to go inside · click a member to set it</span>
       <div class="mast-r">
         <button class="btn sm" id="bReset">Reset view</button>
         <button class="btn sm" id="presetsBtn" aria-haspopup="dialog" aria-expanded="false" title="Save shapes, and share them as a code or link">Presets</button>
@@ -1090,8 +1090,11 @@ function project(p) {
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const Y2 = cp * Y - sp * Z, Z2 = sp * Y + cp * Z;
   const zb = animZoom();
-  const W = PW, H = PH, s = Math.min(W, H) * 0.40 / fit.r * zoom * zb;
-  const dist = fit.r * 4.2, persp = dist / (dist + Y2);
+  // Zoom moves the camera in (a dolly), from 4.2 r away at 1x to 0.105 r at 40x, so it can pass inside the
+  // structure. The scale at the centre is the same as a plain zoom, so normal views look as they did.
+  // The 4th value is the distance in front of the camera: <= NEAR() means behind it (callers clip).
+  const W = PW, H = PH, s = Math.min(W, H) * 0.40 / fit.r;
+  const D0 = fit.r * 4.2, D = D0 / (zoom * zb), cz = D + Y2, persp = D0 / Math.max(cz, 1e-9);
   let ox = 0, oy = 0;
   const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom;
   if (zp && zp.focus && zp.amount > 1 && !project.inner) { // aim at the first pattern while close in
@@ -1099,8 +1102,10 @@ function project(p) {
     const w = (zb - 1) / (zp.amount - 1); ox = w * (f[0] - W / 2); oy = w * (f[1] - H / 2);
   }
   const ro = S.roll * Math.PI / 180, cr = Math.cos(ro), sr = Math.sin(ro), sx = X * s * persp, sz = Z2 * s * persp;
-  return [W / 2 + sx * cr - sz * sr - ox, H / 2 - (sx * sr + sz * cr) - oy, Y2];
+  return [W / 2 + sx * cr - sz * sr - ox, H / 2 - (sx * sr + sz * cr) - oy, Y2, cz];
 }
+const NEAR = () => fit.r * 0.02;  // the camera's near limit
+const camD = () => fit.r * 4.2 / (S.view.zoom * animZoom()); // camera distance from the centre
 let hover = -1;
 const isCable = g => g.m.kind !== 's';
 function mixColor(a, b, t) {
@@ -1125,7 +1130,16 @@ function draw(c = cv, cx = ctx, o = {}) {
   if (!o.base && !fr && idleGives()) base = idlePose(GIVE_T + IDLE_OFF);
   const sel = o.clean ? -2 : S.sel, hov = o.clean ? -2 : hover;
   const P = base.map(project), md = S.model, v = S.verify;
-  let segs = md.members.map((m, k) => ({ k, m, a: P[m.a], b: P[m.b], z: (P[m.a][2] + P[m.b][2]) / 2 }));
+  const near = NEAR();
+  // a member crossing the camera's near limit is cut there; one wholly behind the camera is left out
+  const clip = (A, B, pa, pb) => { const t = (near - A[3]) / (B[3] - A[3]); return project([0, 1, 2].map(k => pa[k] + (pb[k] - pa[k]) * t)); };
+  let segs = [];
+  md.members.forEach((m, k) => {
+    let a = P[m.a], b = P[m.b];
+    if (a[3] <= near && b[3] <= near) return;
+    if (a[3] <= near) a = clip(a, b, base[m.a], base[m.b]); else if (b[3] <= near) b = clip(b, a, base[m.b], base[m.a]);
+    segs.push({ k, m, a, b, z: (a[2] + b[2]) / 2, cz: (a[3] + b[3]) / 2 });
+  });
   if (fr) {
     // faint ghost of the finished structure, so each piece has a visible place to go
     const Pg = S.result.P.map(project);
@@ -1135,7 +1149,9 @@ function draw(c = cv, cx = ctx, o = {}) {
     segs = segs.filter(g => fr.alpha[g.k] > 0.001);
   }
   segs.sort((x, y) => y.z - x.z);
-  const zs = P.map(p => p[2]), zmin = Math.min(...zs), zmax = Math.max(...zs);
+  const zs = P.filter(p => p[3] > near).map(p => p[2]), zmin = zs.length ? Math.min(...zs) : 0, zmax = zs.length ? Math.max(...zs) : 1;
+  // up close (zoom past 1x), lines thicken with nearness like real rods; at 1x and below nothing changes
+  const zk = Math.max(0, Math.min(1, S.view.zoom * animZoom() - 1)), Dc = camD();
   const mf = maxForce();
   ctx.lineCap = 'round';
   for (const s of segs) {
@@ -1145,7 +1161,10 @@ function draw(c = cv, cx = ctx, o = {}) {
     const f = Math.abs(v.q[s.k] * S.result.lengths[s.k]) / mf;
     // rods drawn about 1/40 of their length thick, like the reference sculpture
     const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d)) * S.strutW;
-    let col = isS ? colors.strut : colors.cable, w = isS ? rod : 1.1;
+    // zoomed in, rods take their true thickness (1/40 of their length) in perspective, so near ones fill out and
+    // far ones stay readable; cables thicken a little up close. Blended in from 1x to 2x.
+    const pp = fit.r * 4.2 / Math.max(s.cz, near), rodTrue = Math.max(1.2, Math.min(80, fit.strut * Math.min(W, H) * 0.40 / fit.r * pp / 40 / d)) * S.strutW;
+    let col = isS ? colors.strut : colors.cable, w = isS ? rod + (rodTrue - rod) * zk : 1.1 * (zk ? Math.max(0.6, Math.min(3, Math.pow(Dc / Math.max(s.cz, near), zk) * 1.5)) : 1);
     if (S.force) { col = isS ? colors.com : colors.ten; w = isS ? 2 + 6 * f : 0.6 + 2.8 * f; }
     if (s.k === sel || s.k === hov) { col = colors.sel; }
     if (!isS && v.q[s.k] <= 1e-9) { ctx.setLineDash([4 * d, 4 * d]); } else ctx.setLineDash([]);
@@ -1157,6 +1176,7 @@ function draw(c = cv, cx = ctx, o = {}) {
     const cv3 = fr && fr.curve[s.k], sk3 = fr && fr.stroke[s.k];
     if (sk3) { // strut drawing itself out from a joint
       const a3 = fr.P[sk3.from], b3 = fr.P[sk3.to], tip = project([0, 1, 2].map(d => a3[d] + (b3[d] - a3[d]) * sk3.r)), a2 = project(a3);
+      if (tip[3] <= near || a2[3] <= near) continue;
       ctx.moveTo(a2[0], a2[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
       ctx.save(); ctx.globalAlpha = sk3.thin ? 0.5 * fa : 0.9; ctx.fillStyle = colors.strut; ctx.beginPath(); ctx.arc(tip[0], tip[1], (sk3.thin ? 1 : 1.6) * d, 0, 7); ctx.fill(); ctx.restore();
       ctx.beginPath();
@@ -1239,23 +1259,26 @@ function drawVE(ctx, d, t) {
     const b = [N[1] * a[2] - N[2] * a[1], N[2] * a[0] - N[0] * a[2], N[0] * a[1] - N[1] * a[0]];
     const Q = [];
     for (let i = 0; i <= n; i++) { const t2 = i / n * 2 * Math.PI; Q.push(project([0, 1, 2].map(k => c[k] + R * (Math.cos(t2) * a[k] + Math.sin(t2) * b[k])))); }
-    const at = f => { const x = f * n, i = Math.min(n - 1, Math.floor(x)), r = x - i, p = Q[i], q = Q[i + 1]; return [p[0] + (q[0] - p[0]) * r, p[1] + (q[1] - p[1]) * r, p[2] + (q[2] - p[2]) * r]; };
+    const at = f => { const x = f * n, i = Math.min(n - 1, Math.floor(x)), r = x - i, p = Q[i], q = Q[i + 1]; return [p[0] + (q[0] - p[0]) * r, p[1] + (q[1] - p[1]) * r, p[2] + (q[2] - p[2]) * r, p[3] + (q[3] - p[3]) * r]; };
     const span = head - tail;
     if (span > 0.001) {
       // the disk: a faint plane through the centre, as much of it as the rim has drawn
-      ctx.globalAlpha = 0.03 * span; ctx.fillStyle = col; ctx.beginPath();
-      Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+      if (Q.every(q => q[3] > NEAR())) { // no disk once the camera is inside it
+        ctx.globalAlpha = 0.03 * span; ctx.fillStyle = col; ctx.beginPath();
+        Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+      }
       // the rim from tail to head, fading on the far side like the struts
       ctx.strokeStyle = col; ctx.lineWidth = 1.6 * d;
       const steps = Math.max(1, Math.ceil(span * n));
       for (let j = 0; j < steps; j++) {
         const p = at(tail + span * j / steps), q = at(tail + span * (j + 1) / steps);
+        if (p[3] <= NEAR() || q[3] <= NEAR()) continue;
         const depth = Math.max(0, Math.min(1, ((p[2] + q[2]) / 2 + R) / (2 * R)));
         ctx.globalAlpha = Math.max(0.15, 1 - 0.7 * S.shade * depth);
         ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
       }
       if (head < 1 || (tail > 0 && tail < 1)) { // the bright point at the moving end
-        const tip = at(head < 1 ? head : tail);
+        const tip = at(head < 1 ? head : tail); if (tip[3] <= NEAR()) return;
         ctx.globalAlpha = 0.95; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(tip[0], tip[1], 2 * d, 0, 7); ctx.fill();
       }
     }
@@ -1263,10 +1286,11 @@ function drawVE(ctx, d, t) {
     // with a point where it leaves each face
     if (!S.veAxes || axis < 0.001) return;
     const e0 = project([0, 1, 2].map(k => c[k] - 1.12 * R * axis * N[k])), e1 = project([0, 1, 2].map(k => c[k] + 1.12 * R * axis * N[k]));
+    if (e0[3] <= NEAR() || e1[3] <= NEAR()) return;
     ctx.globalAlpha = 0.6; ctx.strokeStyle = col; ctx.lineWidth = 0.9 * d; ctx.setLineDash([4 * d, 4 * d]);
     ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke(); ctx.setLineDash([]);
     const dot = clamp01((axis - 0.85) / 0.15);
-    if (dot > 0) { ctx.fillStyle = col; for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); ctx.globalAlpha = (f[2] < 0 ? 0.9 : 0.4) * dot; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); } }
+    if (dot > 0) { ctx.fillStyle = col; for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); if (f[3] <= NEAR()) continue; ctx.globalAlpha = (f[2] < 0 ? 0.9 : 0.4) * dot; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); } }
   });
   ctx.restore();
 }
@@ -1278,6 +1302,7 @@ function pick(mx, my) {
   let best = -1, bd = 10 * d, bz = Infinity;
   S.model.members.forEach((m, k) => {
     const a = P[m.a], b = P[m.b], dx = b[0] - a[0], dy = b[1] - a[1];
+    if (a[3] <= NEAR() || b[3] <= NEAR()) return;
     const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
     const px = a[0] + dx * t, py = a[1] + dy * t, dd = Math.hypot(x - px, y - py) - (m.kind === 's' ? 3 * d : 0);
     const z = a[2] + (b[2] - a[2]) * t;
@@ -1301,7 +1326,7 @@ cv.addEventListener('pointerup', e => {
   drag = null;
 });
 cv.addEventListener('pointerleave', () => { hover = -1; });
-cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S.view.zoom = Math.max(0.3, Math.min(5, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
+cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S.view.zoom = Math.max(0.3, Math.min(40, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
 
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
