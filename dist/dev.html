@@ -304,6 +304,8 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .pre-share { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
 .linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: 500 12px var(--font); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkbtn:hover { color: var(--accent); }
+.colours3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.colours label:has(input:disabled) { opacity: .45; }
 .colours input[type="color"] { width: 100%; height: 34px; padding: 3px; border: 0; border-radius: 3px; background: var(--well); cursor: pointer;
                                 box-shadow: inset 0 -1px 0 var(--line); }
 .colours input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
@@ -511,9 +513,10 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       </div>
       <div class="row"><label for="strutW">Strut weight</label><span class="val" id="strutWVal"></span><input type="range" id="strutW" min="25" max="300" step="5" value="100"></div>
       <div class="row"><span class="lbl">Colours</span><button type="button" class="linkbtn" id="colReset" title="Back to the artboard's own colours">Reset</button></div>
-      <div class="grid2 colours">
+      <div class="colours colours3">
         <label class="f">Struts<input type="color" id="colStrut" aria-label="Strut colour"></label>
         <label class="f">Cables<input type="color" id="colCable" aria-label="Cable colour"></label>
+        <label class="f" id="colBgWrap">Artboard<input type="color" id="colBg" aria-label="Artboard colour"></label>
       </div>
       <div class="row">
         <label for="shade">Depth shading</label><span class="val" id="shVal">100%</span>
@@ -2281,8 +2284,12 @@ document.querySelectorAll('input[name="bg"]').forEach(r => r.addEventListener('c
 // Strut and cable colours: a pick is set on the board as its own --vp-strut / --vp-cable, so it holds on every
 // artboard and everything that reads the board's colours (view, legend, exports, icon peek, Framer) follows.
 // Reset goes back to each artboard's own colours (#E3DEC9 on Ink and Clear). Remembered as tw.colours.
-const COL = { strut: '--vp-strut', cable: '--vp-cable' };
-function syncColours() { $('colStrut').value = toHex(colors.strut); $('colCable').value = toHex(colors.cable); }
+const COL = { strut: '--vp-strut', cable: '--vp-cable', bg: '--vp-bg' };
+function syncColours() {
+  $('colStrut').value = toHex(colors.strut); $('colCable').value = toHex(colors.cable);
+  const clear = S.bg === 'clear'; $('colBg').disabled = clear; // Clear is transparent: no colour to pick
+  $('colBg').value = clear ? '#1d1d1d' : toHex(colors.bg); $('colBgWrap').title = clear ? 'Clear has no artboard colour: pick Ink or Paper' : '';
+}
 function toHex(c) { if (/^#[0-9a-f]{6}$/i.test(c)) return c; const m = String(c).match(/\d+/g); return m && m.length >= 3 ? '#' + m.slice(0, 3).map(x => (+x).toString(16).padStart(2, '0')).join('') : '#e3dec9'; }
 function setColour(k, v) {
   if (v) $('board').style.setProperty(COL[k], v); else $('board').style.removeProperty(COL[k]);
@@ -2292,7 +2299,8 @@ function setColour(k, v) {
 }
 $('colStrut').addEventListener('input', e => setColour('strut', e.target.value));
 $('colCable').addEventListener('input', e => setColour('cable', e.target.value));
-$('colReset').addEventListener('click', () => { setColour('strut', null); setColour('cable', null); });
+$('colBg').addEventListener('input', e => { if (S.bg !== 'clear') setColour('bg', e.target.value); });
+$('colReset').addEventListener('click', () => { setColour('strut', null); setColour('cable', null); setColour('bg', null); });
 setBg('ink'); // always land on light rods on the dark artboard; Paper and Clear are per visit
 try { const c = JSON.parse(store.get('tw.colours') || '{}'); for (const k of Object.keys(COL)) if (/^#[0-9a-f]{6}$/i.test(c[k] || '')) $('board').style.setProperty(COL[k], c[k]); } catch (e) {}
 readColors(); syncColours();
@@ -3066,8 +3074,9 @@ const baseName = () => 'tensegrity_' + ((S.shown && S.shown.name) || 'structure'
 const hexRgb = h => { const n = parseInt(h.replace('#', ''), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
 const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 // background for formats that need one: the artboard, or for Clear whichever suits the strut colour
-const solidBg = () => S.bg !== 'clear' ? BG_COLORS[S.bg] : (luma(hexRgb(colors.strut)) > 128 ? BG_COLORS.ink : BG_COLORS.paper);
-const exportFill = () => S.exportBg && S.bg !== 'clear' ? BG_COLORS[S.bg] : null;
+const artboardColour = () => toHex(colors.bg); // a picked colour, or the artboard's own
+const solidBg = () => S.bg !== 'clear' ? artboardColour() : (luma(hexRgb(colors.strut)) > 128 ? BG_COLORS.ink : BG_COLORS.paper);
+const exportFill = () => S.exportBg && S.bg !== 'clear' ? artboardColour() : null;
 const exportScale = size => size / 700;
 
 // SVG still: the same draw() as the view and the PNG, into a small stand-in for a canvas 2D context that writes
