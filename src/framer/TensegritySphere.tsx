@@ -259,7 +259,7 @@ const I = (DATA && DATA.interact) || {} // interaction settings chosen in the wo
 const or = (v, d) => (v === undefined ? d : v)
 TensegritySphere.defaultProps = {
     background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#f2f0ea", cableColor: S.cable || "#9a9890",
-    highlightColor: S.highlight || "#f26a2c", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
+    highlightColor: S.highlight || "#ff4e02", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
     inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
     scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
     depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,

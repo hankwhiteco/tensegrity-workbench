@@ -14,7 +14,7 @@
   --key: #3a3a38;         /* keys */
   --key-fg: #e8e6e0;
   --cap: #d8d6d0;         /* slider caps, switch tongues */
-  --accent: #f26a2c;      /* Braun orange */
+  --accent: #ff4e02;      /* Braun orange */
   --accent-ink: #141413;
   --pass: #5cc28a;
   --fail: #ef6d62;
@@ -51,14 +51,14 @@ h1 { font: 500 17px/1 var(--font); margin: 0; letter-spacing: -0.005em; }
 /* the artboard: viewport colours come from its data-bg, so Ink, Paper and Clear each have their own */
 .board { position: relative; min-height: 0; border-radius: 6px; overflow: hidden;
          box-shadow: inset 0 0 0 1px var(--line); background: var(--vp-bg);
-         --vp-bg: #141413; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #f26a2c;
-         --vp-tension: #f26a2c; --vp-compress: #7a711e; --vp-text: #8d8b85;
+         --vp-bg: #141413; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #ff4e02;
+         --vp-tension: #ff4e02; --vp-compress: #7a711e; --vp-text: #8d8b85;
          --chip: rgba(20, 20, 19, 0.85); --chip-fg: #e8e6e0; --chip-line: rgba(232, 230, 224, 0.14); }
-.board[data-bg="paper"] { --vp-bg: #f2f1ed; --vp-strut: #1d1d1c; --vp-cable: #7d7b75; --vp-sel: #ef5a1f;
-         --vp-tension: #ef5a1f; --vp-compress: #7a711e; --vp-text: #84827d;
+.board[data-bg="paper"] { --vp-bg: #f2f1ed; --vp-strut: #1d1d1c; --vp-cable: #7d7b75; --vp-sel: #ff4e02;
+         --vp-tension: #ff4e02; --vp-compress: #7a711e; --vp-text: #84827d;
          --chip: rgba(242, 241, 237, 0.92); --chip-fg: #1d1d1c; --chip-line: rgba(29, 29, 28, 0.12); }
-.board[data-bg="clear"] { --vp-bg: transparent; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #f26a2c;
-         --vp-tension: #f26a2c; --vp-compress: #7a711e; --vp-text: #8d8b85;
+.board[data-bg="clear"] { --vp-bg: transparent; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #ff4e02;
+         --vp-tension: #ff4e02; --vp-compress: #7a711e; --vp-text: #8d8b85;
          --chip: rgba(20, 20, 19, 0.85); --chip-fg: #e8e6e0; --chip-line: rgba(232, 230, 224, 0.14);
          background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 20px 20px; }
 canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
@@ -580,7 +580,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       <div class="row" id="iconLoopRow" hidden><label for="iconLoop">Loop</label><span class="val" id="iconLoopVal"></span><input type="range" id="iconLoop" min="2" max="20" step="0.5" value="6"></div>
       <div class="row" id="iconGifRow" hidden>
         <span class="lbl">Colour</span>
-        <input type="color" id="iconColor" value="#f26a2c" aria-label="Icon colour">
+        <input type="color" id="iconColor" value="#ff4e02" aria-label="Icon colour">
       </div>
       <div class="exports three" id="iconGifOpts" hidden>
         <select id="iconGifSize" aria-label="Icon GIF size"><option value="120">120 px</option><option value="240" selected>240 px</option><option value="480">480 px</option></select>
@@ -938,7 +938,7 @@ const I = (DATA && DATA.interact) || {} // interaction settings chosen in the wo
 const or = (v, d) => (v === undefined ? d : v)
 TensegritySphere.defaultProps = {
     background: S.background || "rgba(0, 0, 0, 0)", strutColor: S.strut || "#f2f0ea", cableColor: S.cable || "#9a9890",
-    highlightColor: S.highlight || "#f26a2c", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
+    highlightColor: S.highlight || "#ff4e02", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
     inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
     scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
     depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,
@@ -3121,7 +3121,7 @@ function iconSync() {
   $('iconMP').style.color = mp > 50 ? 'var(--fail)' : '';
   store.set('tw.icon', JSON.stringify({ view: $('iconView').value, stroke: $('iconStroke').value, cables: $('iconCables').checked, back: $('iconBack').checked, motion, loop: $('iconLoop').value, color: $('iconColor').value, size: $('iconGifSize').value, matte: $('iconMatte').value }));
 }
-try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; if (o.motion) document.querySelector(`input[name="iconMotion"][value="${o.motion}"]`).checked = true; if (o.loop) $('iconLoop').value = o.loop; if (o.color) $('iconColor').value = o.color; if (o.size) $('iconGifSize').value = o.size; if (o.matte) $('iconMatte').value = o.matte; } catch (e) {}
+try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; if (o.motion) document.querySelector(`input[name="iconMotion"][value="${o.motion}"]`).checked = true; if (o.loop) $('iconLoop').value = o.loop; if (o.color) $('iconColor').value = /^#(f26a2c|ef5a1f)$/i.test(o.color) ? '#ff4e02' : o.color; /* the old default orange moves to the new one */ if (o.size) $('iconGifSize').value = o.size; if (o.matte) $('iconMatte').value = o.matte; } catch (e) {}
 $('iconLoop').addEventListener('input', () => { $('iconLoopVal').textContent = `${$('iconLoop').value} s`; });
 $('iconColor').addEventListener('input', () => { $('iconPrev').style.color = $('iconPeek').style.color = $('iconColor').value; });
 // Icon toggle (masthead): the icon export, live in the artboard's corner on any tab; a click opens its settings
@@ -3208,14 +3208,14 @@ const wvPage = layout => `<!doctype html><html><head><meta charset="utf-8"><meta
   .hero { min-height: 92vh; display: grid; align-content: center; gap: 18px; padding: 0 6vw; }
   .hero h1 { font-weight: 300; font-size: clamp(32px, 6vw, 72px); line-height: 1.05; margin: 0; max-width: 12ch; }
   .hero p { color: #8d8b85; max-width: 40ch; margin: 0; }
-  .cue { color: #f26a2c; font-size: 13px; }
+  .cue { color: #ff4e02; font-size: 13px; }
   #stage { width: min(78vh, 86vw); aspect-ratio: 1; margin: 0 auto; }
   .copy { padding: 18vh 6vw 60vh; display: grid; gap: 14px; max-width: 640px; margin: 0 auto; }
   .bar { height: 12px; border-radius: 3px; background: #1f1f1e; }
   .err { padding: 40px 6vw; color: #ef6d62; }
   .story { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 4vw; padding: 0 6vw; }
   .story article { min-height: 86vh; display: grid; align-content: center; gap: 12px; max-width: 34ch; }
-  .story .no { color: #f26a2c; font-size: 12px; letter-spacing: .08em; }
+  .story .no { color: #ff4e02; font-size: 12px; letter-spacing: .08em; }
   .story h2 { font-weight: 300; font-size: clamp(24px, 3.4vw, 40px); margin: 0; }
   .story p { color: #8d8b85; margin: 0; }
   .pin { position: sticky; top: 7vh; height: 86vh; display: grid; place-items: center; }
