@@ -2795,6 +2795,12 @@ function makePlan() {
       order0.push({ k, from: score(m.a) > score(m.b) ? m.a : score(m.b) > score(m.a) ? m.b : (axial(m.a) >= axial(m.b) ? m.a : m.b) });
       drawn.add(m.a); drawn.add(m.b);
     });
+    // stroke starts: not a metronome. The first come a little slower and they quicken (1.25x down to 0.75x the
+    // gap), with a golden-ratio stagger of +-25%, scaled so the pattern takes the same time as before
+    const nF = flower.length, rawG = [];
+    for (let i = 1; i < nF; i++) rawG.push((1.25 - 0.5 * (i - 1) / Math.max(1, nF - 2)) * (1 + 0.5 * (((i * 0.618034) % 1) - 0.5)));
+    const gScale = (nF - 1) * gap / (rawG.reduce((a, b) => a + b, 0) || 1), offs = [0];
+    rawG.forEach(g => offs.push(offs[offs.length - 1] + g * gScale));
     const span = (flower.length - 1) * gap + flight, closeAfter = span + 1.2, breathDur = 2.2;
     const axesInOrder = [v0, ...others];
     const starts = [0.8];
@@ -2811,7 +2817,7 @@ function makePlan() {
           k = mine.reduce((best, x) => d2(mid(x), tm) < d2(mid(best), tm) ? x : best, mine[0]);
           const m = md.members[k]; from = d2(P[m.a], tf) <= d2(P[m.b], tf) ? m.a : m.b;
         }
-        st[k] = { start: starts[j] + i * gap, dur: flight, mode: 'stroke', from, fl: j };
+        st[k] = { start: starts[j] + offs[i], dur: flight, mode: 'stroke', from, fl: j };
       });
       flowers.push({ start: starts[j], hold: starts[j] + closeAfter, quiet: starts[j] + closeAfter + breathDur });
     });
@@ -2855,8 +2861,11 @@ function makePlan() {
   const nodeFl = P.map((p, i) => flOf(strutOf[i]));
   const tugs = flowers.map(() => []);
   md.members.forEach((m, k) => { if (m.kind !== 's' && nodeFl[m.a] === nodeFl[m.b]) tugs[nodeFl[m.a]].push(cab[k].start + cab[k].reveal); });
+  // how many tugs overlap on average in each pattern (each lasts 2.4 s, sin^2 averages 1/2): the tug is divided by it,
+  // so a pattern draws in by one tug's depth as its threads take the strain, smoothly, however many threads it has
+  const conc = tugs.map(list => { if (!list.length) return 1; const lo = Math.min(...list), hi = Math.max(...list); return Math.max(1, 0.5 * list.length * 2.4 / (hi - lo + 2.4)); });
   const give = !reduce.matches ? {
-    flowers, tugs, rise: 1.8,
+    flowers, tugs, conc, rise: 1.8,
   } : null;
   return { st, cab, strutOf, nodeFl, end, caps, P, face: faceDir, holdUntil, breaths, ghostAt, zoom, give };
 }
@@ -2928,7 +2937,7 @@ function animFrame(t) {
     const envOf = f => t < f.hold ? ease((t - f.start) / gv.rise) : 1 - (1 - GIVE_REST) * ease((t - f.hold) / (f.quiet - f.hold));
     const envF = gv.flowers.map(envOf);
     // a thread taking the strain draws its pattern in once, smoothly, and lets go: no bounce
-    const tugF = gv.tugs.map(list => { let tug = 0; for (const t0 of list) { const u = t - t0; if (u > 0 && u < 2.4) tug -= 0.0025 * ANIM.give * Math.sin(Math.PI * u / 2.4) ** 2; } return tug; });
+    const tugF = gv.tugs.map((list, j) => { let tug = 0; for (const t0 of list) { const u = t - t0; if (u > 0 && u < 2.4) tug -= 0.0025 * ANIM.give * Math.sin(Math.PI * u / 2.4) ** 2; } return tug / gv.conc[j]; });
     const tg = t >= pl.end ? pl.end + (GIVE_T - (ANIM.endClock || GIVE_T)) : t;
     applyGive(out, tg, n => envF[pl.nodeFl[n]] || 0, Math.max(...envF), n => tugF[pl.nodeFl[n]] || 0);
   }
@@ -3017,7 +3026,7 @@ $('aPlay').onclick = () => {
 };
 $('aScrub').addEventListener('input', e => { if (!ANIM.plan) return; ANIM.playing = false; ANIM.t = ANIM.plan.end * e.target.value / 1000; animCaption(); });
 
-if (location.hash === '#noworker') window.__twDraw = () => { if (ANIM.plan) animCaption(); draw(); }; // test hook
+if (location.hash === '#noworker') { window.__twDraw = () => { if (ANIM.plan) animCaption(); draw(); }; window.__twPlan = () => ANIM.plan; } // test hooks
 
 // ---------- image and motion export (PNG, GIF, MP4) ----------
 // Frames are square and drawn off screen with the same draw() as the view, scaled so lines read as they
@@ -3216,7 +3225,7 @@ async function runExport(kind) {
   const size = +$('motionSize').value;
   // everything a clip moves, so the view comes back exactly as it was
   stopFly();
-  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, WOB_T, result: S.result,
+  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, WOB_T, SPIN_V, result: S.result,
     anim: { on: ANIM.on, playing: ANIM.playing, t: ANIM.t, plan: ANIM.plan, viewT: ANIM.viewT, viewFrom: ANIM.viewFrom, viewTo: ANIM.viewTo, endClock: ANIM.endClock } };
   exporting = { kind, cancel: false };
   const btn = kind === 'gif' ? $('exGif') : $('exMp4');
@@ -3234,7 +3243,7 @@ async function runExport(kind) {
       blob = kind === 'gif' ? await encodeGif(lib, plan, c, cx, frame, fps) : await encodeMp4(lib, plan, c, cx, frame, fps);
     }
   } catch (e) { failed = e; console.error(e); }
-  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T; WOB_T = saved.WOB_T;
+  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T; WOB_T = saved.WOB_T; SPIN_V = saved.SPIN_V;
   if (S.result === saved.result) Object.assign(ANIM, saved.anim);
   else if (ANIM.on) stopBuild(); // a new solve arrived meanwhile: the old build no longer fits
   if (ANIM.on && ANIM.plan) animCaption();
@@ -3668,8 +3677,14 @@ function frame(t) {
   try { draw(); } catch (e) { /* skip this frame */ }
 }
 // advance the camera, the build and the give by dt seconds (ui: update the build caption and scrubber)
+// The spin speed eases to where it is heading (time constant 1.2 s): from the slow drift while the first pattern forms
+// to the full turn, and on Rotate off, Reverse, Turn time changes and after a drag. It used to jump in one frame.
+let SPIN_V = null;
 function step(dt, ui) {
   const holding = ANIM.on && ANIM.plan && ANIM.t < ANIM.plan.holdUntil;
+  const turning = ANIM.on && ANIM.viewTo && ANIM.viewT < 1 && !drag;
+  const spinTo = S.spin && !drag && !turning && !FLY.on ? S.dir * (holding ? 0.03 : 2 * Math.PI / S.turnSecs) : 0;
+  SPIN_V = SPIN_V === null ? spinTo : SPIN_V + (spinTo - SPIN_V) * (1 - Math.exp(-dt / 1.2));
   if (ANIM.on && ANIM.viewTo && ANIM.viewT < 1 && !drag) {
     ANIM.viewT = Math.min(1, ANIM.viewT + dt * ANIM.speed / 0.9);
     const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
@@ -3679,7 +3694,7 @@ function step(dt, ui) {
     FLY.t += dt; const u = FLY.t / S.flySecs;
     if (u >= 1) { S.view.yaw = FLY.yaw0 + flyAt(1, FLY.z0).yaw; stopFly(); }
     else { const f = flyAt(u, FLY.z0); S.view.zoom = f.zoom; S.view.yaw = FLY.yaw0 + f.yaw; }
-  } else if (S.spin && !drag) S.view.yaw += S.dir * dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
+  } else if (!drag) S.view.yaw += dt * SPIN_V; // eased to one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
   GIVE_T += dt; VE_T += dt; WOB_T += dt;
   if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }

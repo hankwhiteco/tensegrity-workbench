@@ -84,7 +84,9 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - Elastic give (`applyGive`, shared by the build and the finished structure; user wants it malleable but not bouncy):
   - Each strut sways about its own centre (up to 1.7 degrees) and floats (up to 1.6% of strut length), slowly (8 to 25 s a cycle, golden-ratio spread). Struts stay rigid; cables stretch.
   - Under that, the 3 softest symmetric modes, very lightly (0.8% of strut length).
-  - A settling cable draws its pattern in once, smoothly (sin^2 bump over 2.4 s). No damped oscillation: the earlier version was too bouncy.
+  - A settling cable draws its pattern in once, smoothly (sin^2 bump over 2.4 s). No damped oscillation: the earlier version was too bouncy. The bumps are averaged, not summed: each pattern's tug is divided by how many overlap on average (`give.conc`), so a big pattern no longer pulses (750 struts: deepest draw-in 3.58% -> 0.46% per 1x give, jerk 8x lower; 120: 1.73% -> 0.55%).
+  - Spin speed eases to its target (`SPIN_V`, time constant 1.2 s): from the 0.03 rad/s drift while the first pattern forms to the full turn (it used to jump in one frame), and on Rotate off, Reverse, Turn time, after a drag, the build's camera turn and the fly preview.
+  - Stroke starts within a pattern are not a metronome: 1.25x the gap at first down to 0.75x, with a golden-ratio stagger of +-25%, scaled to the same total time; order unchanged.
   - Fuller while a pattern forms, then it carries on at 55% (`GIVE_REST`) after the pattern closes, after the build ends, and in the normal view of a sphere. It never stops, so the drawn shape drifts slightly around the solved one. Checks and the cut list always use the solved geometry.
   - Give slider (0 to 3) in the view section. Its own clock (`GIVE_T`), so closing a finished build does not jump.
 - View section: Depth shading 0 to 150% (0 = every line the same, near or far) and Cable brightness 20 to 200% (above 100% blends cables toward the strut colour).
