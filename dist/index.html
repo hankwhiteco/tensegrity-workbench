@@ -67,6 +67,13 @@ canvas.drag { cursor: grabbing; }
 .board .tl b { color: var(--vp-strut); font: 500 14px/1.2 var(--font); display: block; margin-bottom: 2px; }
 .board .legend { position: absolute; left: 14px; bottom: 12px; color: var(--vp-text); font-size: 11px; display: flex; gap: 14px; pointer-events: none; }
 .board .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+/* icon peek: the icon export, live in the artboard's corner */
+.icon-peek { position: absolute; right: 12px; top: 46px; width: 132px; display: grid; justify-items: center; gap: 6px; padding: 12px 10px 9px;
+             border: 0; border-radius: 4px; background: var(--chip); box-shadow: inset 0 0 0 1px var(--chip-line); cursor: pointer; z-index: 1; }
+.icon-peek .ip-art svg { width: 104px; height: 104px; display: block; }
+.icon-peek .ip-cap { font: 400 10.5px/1.3 var(--font); color: var(--vp-text); text-align: center; }
+.icon-peek:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.icon-peek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .busy { position: absolute; right: 12px; top: 12px; font: 500 11px/1 var(--font); padding: 7px 9px; border-radius: 3px;
         background: var(--chip); color: var(--chip-fg); pointer-events: none; }
 .busy.rec::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
@@ -291,6 +298,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       <span class="hint">Drag to turn &#xb7; scroll to zoom &#xb7; click a member to set it</span>
       <div class="mast-r">
         <button class="btn sm" id="bReset">Reset view</button>
+        <button class="btn sm" id="bIconPeek" aria-pressed="false" title="Show the icon export on the artboard while you work">Icon</button>
         <button class="btn sm" id="bFull" aria-pressed="false" title="Hide the panel and the details so the structure fills the window">Full view</button>
       </div>
     </div>
@@ -306,6 +314,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <button class="x" id="aClose" aria-label="Close the build">&#xd7;</button>
       </div>
       <div class="busy" id="busy" hidden>Solving&#x2026;</div>
+      <button class="icon-peek" id="iconPeek" hidden title="Icon settings"><span class="ip-art" id="iconPeekArt"></span><span class="ip-cap" id="iconPeekCap"></span></button>
     </div>
 
     <div class="rbar">
@@ -3031,10 +3040,12 @@ function iconSync() {
   const r = iconSVG(); if (!r) return;
   const motion = iconMotion();
   if ($('iconPrev').dataset.svg !== r.svg) { $('iconPrev').innerHTML = r.svg; $('iconPrev').dataset.svg = r.svg; } // an unchanged animation keeps playing
+  if (!$('iconPeek').hidden && $('iconPeekArt').dataset.svg !== r.svg) { $('iconPeekArt').innerHTML = r.svg; $('iconPeekArt').dataset.svg = r.svg; }
+  $('iconPeekCap').textContent = `${$('iconView').selectedOptions[0].text} \u00b7 ${motion === 'still' ? 'still' : motion}`;
   $('iconInfo').textContent = motion === 'still' ? `${r.lines} lines` : `${r.lines} lines \u00b7 ${(r.svg.length / 1024).toFixed(0)} KB`;
   $('iconLoopRow').hidden = motion === 'still'; $('iconLoopVal').textContent = `${$('iconLoop').value} s`;
   $('iconBack').disabled = motion !== 'still'; // a moving icon shows every line
-  $('iconPrev').style.color = $('iconColor').value;
+  $('iconPrev').style.color = $('iconPeek').style.color = $('iconColor').value;
   $('iconGifRow').hidden = $('iconGifOpts').hidden = motion === 'still';
   $('exIconGif').disabled = motion === 'still'; $('iconGifHint').hidden = motion !== 'still'; // the GIF needs Rock or Turn
   // Figma takes GIFs up to 50 megapixels: width x height x frames
@@ -3045,7 +3056,14 @@ function iconSync() {
 }
 try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; if (o.motion) document.querySelector(`input[name="iconMotion"][value="${o.motion}"]`).checked = true; if (o.loop) $('iconLoop').value = o.loop; if (o.color) $('iconColor').value = o.color; if (o.size) $('iconGifSize').value = o.size; if (o.matte) $('iconMatte').value = o.matte; } catch (e) {}
 $('iconLoop').addEventListener('input', () => { $('iconLoopVal').textContent = `${$('iconLoop').value} s`; });
-$('iconColor').addEventListener('input', () => { $('iconPrev').style.color = $('iconColor').value; });
+$('iconColor').addEventListener('input', () => { $('iconPrev').style.color = $('iconPeek').style.color = $('iconColor').value; });
+// Icon toggle (masthead): the icon export, live in the artboard's corner on any tab; a click opens its settings
+function setIconPeek(on) {
+  $('iconPeek').hidden = !on; $('bIconPeek').setAttribute('aria-pressed', String(on)); store.set('tw.iconPeek', on ? '1' : '0');
+  if (on) { $('iconPeekArt').dataset.svg = ''; iconSync(); }
+}
+$('bIconPeek').addEventListener('click', () => setIconPeek($('iconPeek').hidden));
+$('iconPeek').addEventListener('click', () => { setTab('export'); $('iconPrev').scrollIntoView({ block: 'center', behavior: 'smooth' }); });
 ['iconView', 'iconStroke', 'iconCables', 'iconBack', 'iconLoop', 'im_still', 'im_rock', 'im_turn', 'iconColor', 'iconGifSize', 'iconMatte'].forEach(id => $(id).addEventListener('change', () => { $('iconView').dataset.want = $('iconView').value; iconSync(); }));
 setInterval(() => { if ($('iconView').value === 'shown' && iconMotion() === 'still' && !document.hidden) iconSync(); }, 400); // follows the camera
 // Icon GIF, for Figma (which drops SVG animation): the same lines drawn at the GIF frame rate, one colour.
@@ -3194,6 +3212,7 @@ function setTab(t) {
 }
 document.querySelectorAll('.tabs [data-tab]').forEach(b => b.addEventListener('click', () => { setTab(b.dataset.tab); document.querySelector('.panel').scrollTop = 0; }));
 setTab(store.get('tw.tab') || 'design');
+setIconPeek(store.get('tw.iconPeek') === '1');
 // ---------- panels ----------
 function setDetails(open) {
   $('report').hidden = !open; $('bDetails').textContent = open ? 'Hide details' : 'Show details'; $('bDetails').setAttribute('aria-expanded', String(open));
