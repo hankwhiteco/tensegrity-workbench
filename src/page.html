@@ -51,13 +51,13 @@ h1 { font: 500 17px/1 var(--font); margin: 0; letter-spacing: -0.005em; }
 /* the artboard: viewport colours come from its data-bg, so Ink, Paper and Clear each have their own */
 .board { position: relative; min-height: 0; border-radius: 6px; overflow: hidden;
          box-shadow: inset 0 0 0 1px var(--line); background: var(--vp-bg);
-         --vp-bg: #141413; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #ff4e02;
+         --vp-bg: #1d1d1d; --vp-strut: #e3dec9; --vp-cable: #e3dec9; --vp-sel: #ff4e02;
          --vp-tension: #ff4e02; --vp-compress: #7a711e; --vp-text: #8d8b85;
          --chip: rgba(20, 20, 19, 0.85); --chip-fg: #e8e6e0; --chip-line: rgba(232, 230, 224, 0.14); }
 .board[data-bg="paper"] { --vp-bg: #f2f1ed; --vp-strut: #1d1d1c; --vp-cable: #7d7b75; --vp-sel: #ff4e02;
          --vp-tension: #ff4e02; --vp-compress: #7a711e; --vp-text: #84827d;
          --chip: rgba(242, 241, 237, 0.92); --chip-fg: #1d1d1c; --chip-line: rgba(29, 29, 28, 0.12); }
-.board[data-bg="clear"] { --vp-bg: transparent; --vp-strut: #f2f0ea; --vp-cable: #9a9890; --vp-sel: #ff4e02;
+.board[data-bg="clear"] { --vp-bg: transparent; --vp-strut: #e3dec9; --vp-cable: #e3dec9; --vp-sel: #ff4e02;
          --vp-tension: #ff4e02; --vp-compress: #7a711e; --vp-text: #8d8b85;
          --chip: rgba(20, 20, 19, 0.85); --chip-fg: #e8e6e0; --chip-line: rgba(232, 230, 224, 0.14);
          background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 20px 20px; }
@@ -295,6 +295,11 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .pre-share { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
 .linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: 500 12px var(--font); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkbtn:hover { color: var(--accent); }
+.colours input[type="color"] { width: 100%; height: 34px; padding: 3px; border: 0; border-radius: 3px; background: var(--well); cursor: pointer;
+                                box-shadow: inset 0 -1px 0 var(--line); }
+.colours input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.colours input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.colours input[type="color"]::-moz-color-swatch { border: 0; border-radius: 2px; }
 /* icon export: a flat single-stroke drawing with a live preview */
 .icon-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: start; }
 .icon-prev { width: 96px; height: 96px; border-radius: 3px; background: var(--well); color: var(--accent); display: grid; place-items: center; box-shadow: inset 0 -1px 0 var(--line); }
@@ -483,6 +488,11 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <input type="radio" name="bg" id="bg_paper" value="paper"><label for="bg_paper">Paper</label>
         <input type="radio" name="bg" id="bg_clear" value="clear"><label for="bg_clear">Clear</label>
       </div>
+      <div class="row"><span class="lbl">Colours</span><button type="button" class="linkbtn" id="colReset" title="Back to the artboard's own colours">Reset</button></div>
+      <div class="grid2 colours">
+        <label class="f">Struts<input type="color" id="colStrut" aria-label="Strut colour"></label>
+        <label class="f">Cables<input type="color" id="colCable" aria-label="Cable colour"></label>
+      </div>
       <div class="row">
         <label for="shade">Depth shading</label><span class="val" id="shVal">100%</span>
         <input type="range" id="shade" min="0" max="150" value="100">
@@ -584,7 +594,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       </div>
       <div class="exports three" id="iconGifOpts" hidden>
         <select id="iconGifSize" aria-label="Icon GIF size"><option value="120">120 px</option><option value="240" selected>240 px</option><option value="480">480 px</option></select>
-        <select id="iconMatte" aria-label="Background the icon will sit on"><option value="#141413" selected>For dark bg</option><option value="#ffffff">For light bg</option></select>
+        <select id="iconMatte" aria-label="Background the icon will sit on"><option value="#1d1d1d" selected>For dark bg</option><option value="#ffffff">For light bg</option></select>
         <span class="val" id="iconMP"></span>
       </div>
       <div class="exports">
@@ -981,14 +991,31 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const css = n => getComputedStyle($('board')).getPropertyValue(n).trim();
 let colors = {};
 function readColors() { colors = { bg: css('--vp-bg'), strut: css('--vp-strut'), cable: css('--vp-cable'), sel: css('--vp-sel'), ten: css('--vp-tension'), com: css('--vp-compress'), text: css('--vp-text') }; }
-const BG_COLORS = { ink: '#141413', paper: '#f2f1ed' };
+const BG_COLORS = { ink: '#1d1d1d', paper: '#f2f1ed' };
 function setBg(v) {
   S.bg = BG_COLORS[v] || v === 'clear' ? v : 'ink';
   $('board').dataset.bg = S.bg; document.querySelector(`input[name="bg"][value="${S.bg}"]`).checked = true;
   readColors();
 }
-document.querySelectorAll('input[name="bg"]').forEach(r => r.addEventListener('change', () => setBg(r.value)));
-setBg('ink'); // always land on white rods on the dark artboard; Paper and Clear are per visit
+document.querySelectorAll('input[name="bg"]').forEach(r => r.addEventListener('change', () => { setBg(r.value); syncColours(); }));
+// Strut and cable colours: a pick is set on the board as its own --vp-strut / --vp-cable, so it holds on every
+// artboard and everything that reads the board's colours (view, legend, exports, icon peek, Framer) follows.
+// Reset goes back to each artboard's own colours (#E3DEC9 on Ink and Clear). Remembered as tw.colours.
+const COL = { strut: '--vp-strut', cable: '--vp-cable' };
+function syncColours() { $('colStrut').value = toHex(colors.strut); $('colCable').value = toHex(colors.cable); }
+function toHex(c) { if (/^#[0-9a-f]{6}$/i.test(c)) return c; const m = String(c).match(/\d+/g); return m && m.length >= 3 ? '#' + m.slice(0, 3).map(x => (+x).toString(16).padStart(2, '0')).join('') : '#e3dec9'; }
+function setColour(k, v) {
+  if (v) $('board').style.setProperty(COL[k], v); else $('board').style.removeProperty(COL[k]);
+  readColors(); syncColours();
+  const saved = {}; for (const key of Object.keys(COL)) { const x = $('board').style.getPropertyValue(COL[key]); if (x) saved[key] = x; }
+  store.set('tw.colours', JSON.stringify(saved));
+}
+$('colStrut').addEventListener('input', e => setColour('strut', e.target.value));
+$('colCable').addEventListener('input', e => setColour('cable', e.target.value));
+$('colReset').addEventListener('click', () => { setColour('strut', null); setColour('cable', null); });
+setBg('ink'); // always land on light rods on the dark artboard; Paper and Clear are per visit
+try { const c = JSON.parse(store.get('tw.colours') || '{}'); for (const k of Object.keys(COL)) if (/^#[0-9a-f]{6}$/i.test(c[k] || '')) $('board').style.setProperty(COL[k], c[k]); } catch (e) {}
+readColors(); syncColours();
 let fit = { c: [0, 0, 0], r: 1, target: 1 };
 const MAX_REPS = Math.max(...TG.SPHERE_SIZES.map(([m, n]) => Math.sqrt(m * m + m * n + n * n)));
 function fitView() {
