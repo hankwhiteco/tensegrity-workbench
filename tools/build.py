@@ -5,7 +5,9 @@ import os
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 page = open(os.path.join(root, 'src/page.html')).read()
 solver = open(os.path.join(root, 'src/solver.js')).read()
-body = page.replace('/*SOLVER*/', solver)
+framer = open(os.path.join(root, 'src/framer/TensegritySphere.tsx')).read()
+assert '</script' not in framer
+body = page.replace('/*SOLVER*/', solver).replace('/*FRAMER*/', framer)
 
 # Write every non-ASCII character as an escape, so the page reads the same whatever charset it is served with
 # (the artifact viewer showed the UTF-8 bytes of the times sign, the middle dot and the degree sign as 'Ã' and friends).
