@@ -523,6 +523,10 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <label for="cable">Cable brightness</label><span class="val" id="cbVal">100%</span>
         <input type="range" id="cable" min="20" max="200" value="100">
       </div>
+      <div class="row">
+        <label for="strutB">Strut brightness</label><span class="val" id="sbVal">100%</span>
+        <input type="range" id="strutB" min="20" max="200" value="100">
+      </div>
       <div class="row" title="How much the pattern flexes along its own soft directions">
         <label for="give2">Give</label><span class="val" id="gvVal2">1&#xd7;</span>
         <input type="range" id="give2" min="0" max="300" value="100">
@@ -2040,7 +2044,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, strutB: 1, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -2415,7 +2419,8 @@ function draw(c = cv, cx = ctx, o = {}) {
   ctx.lineCap = 'round';
   const drawSeg = (s, am) => {
     const depth = zmax > zmin ? (s.z - zmin) / (zmax - zmin) : 0.5; // 0 near, 1 far
-    const alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * (isCable(s) ? Math.min(1, S.cable) : 1);
+    let alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * Math.min(1, isCable(s) ? S.cable : S.strutB);
+    if (!isCable(s) && S.strutB > 1) alpha += (1 - alpha) * Math.min(1, S.strutB - 1); // above 100%: far struts lift toward full strength
     const isS = s.m.kind === 's';
     const f = Math.abs(v.q[s.k] * S.result.lengths[s.k]) / mf;
     // rods drawn about 1/40 of their length thick, like the reference sculpture
@@ -2430,6 +2435,8 @@ function draw(c = cv, cx = ctx, o = {}) {
     const fa = fr ? fr.alpha[s.k] : 1;
     ctx.globalAlpha = (s.k === sel ? 1 : alpha) * fa * am;
     if (!isS && S.cable > 1 && !S.force && col === colors.cable) col = mixColor(colors.cable, colors.strut, Math.min(1, S.cable - 1));
+    // struts above 100%: toward white on dark artboards, toward black on Paper (the most contrast either way)
+    if (isS && S.strutB > 1 && !S.force && col === colors.strut) col = mixColor(colors.strut, S.bg === 'paper' ? '#000000' : '#ffffff', 0.85 * Math.min(1, S.strutB - 1));
     ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : (fr ? fr.cw[s.k] : 1));
     ctx.beginPath();
     const cv3 = fr && fr.curve[s.k], sk3 = fr && fr.stroke[s.k];
@@ -3668,10 +3675,12 @@ if (store.get('tw.full') === '1') setFull(true); else setDetails(store.get('tw.d
 
 // ---------- display ----------
 function setShade(v) { S.shade = v; $('shade').value = Math.round(v * 100); $('shVal').textContent = Math.round(v * 100) + '%'; store.set('tw.shade', String(v)); }
+function setStrutB(v) { S.strutB = v; $('strutB').value = Math.round(v * 100); $('sbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.strutB', String(v)); }
+$('strutB').addEventListener('input', e => setStrutB(+e.target.value / 100));
 function setCable(v) { S.cable = v; $('cable').value = Math.round(v * 100); $('cbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.cable', String(v)); }
 $('shade').addEventListener('input', e => setShade(+e.target.value / 100));
 $('cable').addEventListener('input', e => setCable(+e.target.value / 100));
-{ const a = parseFloat(store.get('tw.shade')), b = parseFloat(store.get('tw.cable')); setShade(a >= 0 && a <= 1.5 ? a : 1); setCable(b >= 0.2 && b <= 2 ? b : 1); }
+{ const a = parseFloat(store.get('tw.shade')), b = parseFloat(store.get('tw.cable')); setShade(a >= 0 && a <= 1.5 ? a : 1); setCable(b >= 0.2 && b <= 2 ? b : 1); const sb = parseFloat(store.get('tw.strutB')); setStrutB(sb >= 0.2 && sb <= 2 ? sb : 1); }
 
 let last = performance.now();
 function frame(t) {

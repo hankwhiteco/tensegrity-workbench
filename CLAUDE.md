@@ -89,7 +89,7 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
   - Stroke starts within a pattern are not a metronome: 1.25x the gap at first down to 0.75x, with a golden-ratio stagger of +-25%, scaled to the same total time; order unchanged.
   - Fuller while a pattern forms, then it carries on at 55% (`GIVE_REST`) after the pattern closes, after the build ends, and in the normal view of a sphere. It never stops, so the drawn shape drifts slightly around the solved one. Checks and the cut list always use the solved geometry.
   - Give slider (0 to 3) in the view section. Its own clock (`GIVE_T`), so closing a finished build does not jump.
-- View section: Depth shading 0 to 150% (0 = every line the same, near or far) and Cable brightness 20 to 200% (above 100% blends cables toward the strut colour).
+- View section: Depth shading 0 to 150% (0 = every line the same, near or far) and Cable brightness 20 to 200% (above 100% blends cables toward the strut colour). Strut brightness 20 to 200% (`S.strutB`, `tw.strutB`): below 100% fades the struts; above, faded far struts lift toward full strength and the colour blends toward white (toward black on Paper), so it works even with white struts.
 - Controls: one Play/Pause key; after the build ends it shows Play and restarts from the start.
 
 ## Export
