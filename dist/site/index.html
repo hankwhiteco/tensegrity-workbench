@@ -2452,21 +2452,26 @@ function draw(c = cv, cx = ctx, o = {}) {
   };
   if (!INNER.img) segs.forEach(s => drawSeg(s, 1));
   else {
-    // The image sits at the centre's depth (0). A member does not jump from behind it to in front: within a band
-    // either side of the centre (a third of the joint radius) it is drawn under the image and also over it, the
-    // copy on top fading in as it comes forward. Members wholly behind the band stay under, wholly in front over.
-    let Rj = 0; S.result.P.forEach(p => Rj = Math.max(Rj, Math.hypot(p[0] - fit.c[0], p[1] - fit.c[1], p[2] - fit.c[2])));
-    // How far behind the image each member is (world units, + = behind). Faces you: the depth from the centre.
-    // Turns with it: the distance through the panel's plane to the camera's side, eased toward 0 as the panel turns
-    // edge-on, so the side a member is on never flips at once.
-    const vb = viewBasis(true), N = S.inner.mode === 'face' ? vb.v : unorient([0, 1, 0]), facing = Math.max(-1, Math.min(1, 3 * dot3(vb.v, N)));
-    const behind = s => { const a = base[s.m.a], b = base[s.m.b], mid = [0, 1, 2].map(k => (a[k] + b[k]) / 2 - fit.c[k]); return -dot3(mid, N) * (S.inner.mode === 'face' ? 1 : facing); };
-    const band = Rj / 3, front = z => ease(clamp01((band - z) / (2 * band)));
-    for (const s of segs) s.bz = behind(s);
-    segs.forEach(s => { if (s.bz > -band) drawSeg(s, 1); });
+    // Exact occlusion by the image's plane: each member is split where it crosses the plane; the part behind is drawn
+    // before the image (and hidden by it where they overlap), the part in front after it. Nothing pops and nothing
+    // shows through. Faces you: the plane through the centre square to the view. Turns with it: the panel's plane,
+    // in front = the camera's side of it.
+    const vb = viewBasis(true), c0 = fit.c, N = S.inner.mode === 'face' ? vb.v : unorient([0, 1, 0]);
+    const sgn = S.inner.mode === 'face' || dot3(vb.v, N) >= 0 ? 1 : -1;
+    const fd = q => sgn * ((q[0] - c0[0]) * N[0] + (q[1] - c0[1]) * N[1] + (q[2] - c0[2]) * N[2]); // + = in front
+    const under = [], over = [];
+    for (const sg of segs) {
+      const A = base[sg.m.a], B = base[sg.m.b], da = fd(A), db = fd(B);
+      const plain = (fr && (fr.stroke[sg.k] || fr.curve[sg.k])) || sg.a !== P[sg.m.a] || sg.b !== P[sg.m.b]; // drawing in, or cut at the camera
+      if (plain || (da <= 0 && db <= 0) || (da >= 0 && db >= 0)) { (da + db > 0 ? over : under).push(sg); continue; } // wholly on one side (or not split): by its middle
+      const t = da / (da - db), pm = project([0, 1, 2].map(k => A[k] + (B[k] - A[k]) * t));
+      under.push({ ...sg, a: da < 0 ? sg.a : pm, b: da < 0 ? pm : sg.b });
+      over.push({ ...sg, a: da < 0 ? pm : sg.a, b: da < 0 ? sg.b : pm });
+    }
+    under.forEach(sg => drawSeg(sg, 1));
     ctx.setLineDash([]); ctx.globalAlpha = 1;
     drawInner(ctx, d);
-    segs.forEach(s => { if (s.bz < band) drawSeg(s, front(s.bz)); });
+    over.forEach(sg => drawSeg(sg, 1));
   }
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   if (fr && fr.marks.length) { // joint markers
