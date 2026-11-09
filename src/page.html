@@ -556,6 +556,9 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <button class="btn" id="exPng">PNG still</button>
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
+      <div class="exports">
+        <button class="btn" id="exSvg" title="The view as vector lines: same shading, colours and weights">SVG still</button>
+      </div>
       <label class="check"><input type="checkbox" id="exportBg" checked><span>Include artboard background</span><small>off = transparent PNG and GIF</small></label>
     </section>
 
@@ -1707,6 +1710,41 @@ const solidBg = () => S.bg !== 'clear' ? BG_COLORS[S.bg] : (luma(hexRgb(colors.s
 const exportFill = () => S.exportBg && S.bg !== 'clear' ? BG_COLORS[S.bg] : null;
 const exportScale = size => size / 700;
 
+// SVG still: the same draw() as the view and the PNG, into a small stand-in for a canvas 2D context that writes
+// SVG instead of pixels (only the calls draw() and drawVE() use). Each stroke or fill becomes a path with its colour,
+// width, opacity and dash; arcs become circles; the background a rect. 1000 x 1000, lines scaled like a 700 px view.
+function svgContext(W, H) {
+  const out = [], stack = [], f = x => Math.round(x * 100) / 100, esc2 = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  let st = { globalAlpha: 1, strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, lineCap: 'butt', dash: [], font: '12px sans-serif' }, d = '';
+  const op = a => a < 0.999 ? ` opacity="${f(a)}"` : '';
+  const ctx = {
+    get globalAlpha() { return st.globalAlpha; }, set globalAlpha(v) { st.globalAlpha = v; },
+    get strokeStyle() { return st.strokeStyle; }, set strokeStyle(v) { st.strokeStyle = v; },
+    get fillStyle() { return st.fillStyle; }, set fillStyle(v) { st.fillStyle = v; },
+    get lineWidth() { return st.lineWidth; }, set lineWidth(v) { st.lineWidth = v; },
+    get lineCap() { return st.lineCap; }, set lineCap(v) { st.lineCap = v; },
+    get font() { return st.font; }, set font(v) { st.font = v; },
+    lineJoin: 'miter',
+    save() { stack.push({ ...st, dash: st.dash.slice() }); }, restore() { if (stack.length) st = stack.pop(); },
+    setLineDash(a) { st.dash = a.slice(); },
+    beginPath() { d = ''; }, closePath() { d += 'Z'; },
+    moveTo(x, y) { d += `M${f(x)} ${f(y)}`; }, lineTo(x, y) { d += `L${f(x)} ${f(y)}`; },
+    arc(x, y, r) { d += `M${f(x + r)} ${f(y)}A${f(r)} ${f(r)} 0 1 0 ${f(x - r)} ${f(y)}A${f(r)} ${f(r)} 0 1 0 ${f(x + r)} ${f(y)}Z`; },
+    stroke() { if (d && st.globalAlpha > 0.002) out.push(`<path d="${d}" fill="none" stroke="${st.strokeStyle}" stroke-width="${f(st.lineWidth)}" stroke-linecap="${st.lineCap}"${st.dash.length ? ` stroke-dasharray="${st.dash.map(f).join(' ')}"` : ''}${op(st.globalAlpha)}/>`); },
+    fill() { if (d && st.globalAlpha > 0.002) out.push(`<path d="${d}" fill="${st.fillStyle}"${op(st.globalAlpha)}/>`); },
+    fillRect(x, y, w, h) { out.push(`<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" fill="${st.fillStyle}"${op(st.globalAlpha)}/>`); },
+    clearRect() {},
+    fillText(t, x, y) { const px = parseFloat(st.font) || 12; out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${f(px)}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" fill="${st.fillStyle}"${op(st.globalAlpha)}>${esc2(t)}</text>`); },
+  };
+  return { ctx, svg: () => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n${out.join('\n')}\n</svg>\n`, count: () => out.length };
+}
+$('exSvg').addEventListener('click', () => {
+  if (!S.result || exporting) return;
+  const size = 1000, sc = svgContext(size, size);
+  try { draw({ width: size, height: size }, sc.ctx, { d: exportScale(size), bg: exportFill(), clean: true }); }
+  catch (e) { console.error(e); toast('Couldn’t render the SVG.'); return; }
+  offer(`${baseName()}.svg`, new Blob([sc.svg()], { type: 'image/svg+xml' }));
+});
 $('exPng').addEventListener('click', () => {
   if (!S.result || exporting) return;
   const size = +$('pngSize').value, c = document.createElement('canvas'); c.width = c.height = size;
@@ -1749,7 +1787,7 @@ function syncClip() {
   $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
   $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
   $('gifRate').value = String(S.gifCs);
-  $('exPng').disabled = $('exFramer').disabled = $('webPreview').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
+  $('exPng').disabled = $('exSvg').disabled = $('exFramer').disabled = $('webPreview').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
 }
 document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener('change', () => { S.clip = r.value; store.set('tw.clip', S.clip); syncClip(); }));
 $('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });

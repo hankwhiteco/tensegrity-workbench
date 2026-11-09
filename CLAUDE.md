@@ -90,6 +90,7 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - Controls: one Play/Pause key; after the build ends it shows Play and restarts from the start.
 
 ## Export
+- SVG still (Export > Image): the same `draw()` into `svgContext()`, a stand-in for the canvas 2D context that writes SVG (only the calls draw and drawVE use: paths with colour, width, cap, dash, opacity; arcs as circles; background rect; text for node ids). 1000 x 1000, lines scaled like a 700 px view, background from the artboard background switch. Checked against the PNG of the same view: mean difference 0.57 / 255 per pixel.
 - PNG still (1024 to 4096), and GIF or MP4 (30 fps, H.264 via WebCodecs) clips at 720, 1080 or 1600 px. Same scheme as the Dymaxion studio. GIF frame rate is a choice of 10, 12.5, 16.7, 20 (default), 25, 33 or 50 fps: GIF delays are whole hundredths of a second, so only these are exact (`S.gifCs`, remembered). Frames are generated at that exact rate, so clip length is right. gifenc and mp4-muxer load from jsDelivr on first use.
 - Frames are square, drawn off screen by the same `draw(canvas, ctx, opts)` as the view, with line scale `size / 700` so they read like a 700 px view. No selection or hover in exports.
 - Turn length (4 to 40 s, default 35 s, which is the old 0.18 rad/s) also sets the live Rotate speed, so the view turns at exactly the speed a turn exports at; the build clip's spin follows it too. The slow 0.03 rad/s while the first pattern forms is unchanged.
