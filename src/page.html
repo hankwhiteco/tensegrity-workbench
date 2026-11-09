@@ -465,7 +465,19 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <input type="radio" name="iconMotion" id="im_turn" value="turn"><label for="im_turn">Turn<small>full revolution</small></label>
       </div>
       <div class="row" id="iconLoopRow" hidden><label for="iconLoop">Loop</label><span class="val" id="iconLoopVal"></span><input type="range" id="iconLoop" min="2" max="20" step="0.5" value="6"></div>
-      <button class="btn" id="exIcon">Icon (SVG)</button>
+      <div class="row" id="iconGifRow" hidden>
+        <span class="lbl">Colour</span>
+        <input type="color" id="iconColor" value="#f26a2c" aria-label="Icon colour">
+      </div>
+      <div class="exports three" id="iconGifOpts" hidden>
+        <select id="iconGifSize" aria-label="Icon GIF size"><option value="120">120 px</option><option value="240" selected>240 px</option><option value="480">480 px</option></select>
+        <select id="iconMatte" aria-label="Background the icon will sit on"><option value="#141413" selected>For dark bg</option><option value="#ffffff">For light bg</option></select>
+        <span class="val" id="iconMP"></span>
+      </div>
+      <div class="exports">
+        <button class="btn" id="exIcon">Icon (SVG)</button>
+        <button class="btn" id="exIconGif" hidden>Icon GIF</button>
+      </div>
       <div class="row"><span class="lbl">Motion</span><span class="val" id="clipInfo"></span></div>
       <div class="seg" role="radiogroup" aria-label="Clip">
         <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
@@ -1499,7 +1511,7 @@ $('exportBg').addEventListener('change', e => { S.exportBg = e.target.checked; s
 { const t = parseInt(store.get('tw.turn')); if (t >= 4 && t <= 40) S.turnSecs = t; }
 S.clip = store.get('tw.clip') === 'build' ? 'build' : 'turn';
 S.exportBg = store.get('tw.exportBg') !== '0';
-$('gifRate').addEventListener('change', e => { S.gifCs = +e.target.value; store.set('tw.gifCs', String(S.gifCs)); });
+$('gifRate').addEventListener('change', e => { S.gifCs = +e.target.value; store.set('tw.gifCs', String(S.gifCs)); if (typeof iconSync === 'function') iconSync(); });
 { const g = parseInt(store.get('tw.gifCs')); if ([2, 3, 4, 5, 6, 8, 10].includes(g)) S.gifCs = g; }
 
 const libs = {};
@@ -1726,6 +1738,21 @@ function iconBasis() {
   return { u, v, w: [v[1] * u[2] - v[2] * u[1], v[2] * u[0] - v[0] * u[2], v[0] * u[1] - v[1] * u[0]] };
 }
 const iconMotion = () => document.querySelector('input[name="iconMotion"]:checked').value;
+// a moving icon: joints in the drawing frame, the members drawn, and one scale for every frame (from the
+// 3D radius about the vertical, so nothing leaves the frame)
+function iconMoving() {
+  const P = S.result.P, c = centroid(P), { u, v, w } = iconBasis(), motion = iconMotion();
+  const D = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w), dot3(d, v)]; });
+  const members = S.model.members.filter(m => m.kind === 's' || $('iconCables').checked);
+  let R = 0; D.forEach(q => R = Math.max(R, motion === 'turn' ? Math.hypot(q[0], q[2], q[1]) : Math.hypot(Math.abs(q[0]) + Math.abs(q[2]) * Math.sin(ICON_ROCK), q[1])));
+  return { D, members, motion, k: 21 / (R || 1) };
+}
+// the lines at loop phase t (0..1) on the 48 grid: [x1, y1, x2, y2] per member
+function iconLines(g, t) {
+  const th = g.motion === 'turn' ? 2 * Math.PI * t : ICON_ROCK * Math.sin(2 * Math.PI * t), C = Math.cos(th), Sn = Math.sin(th), D = g.D, k = g.k;
+  return g.members.map(m => { const a = D[m.a], b = D[m.b];
+    return [24 + (a[0] * C + a[2] * Sn) * k, 24 - a[1] * k, 24 + (b[0] * C + b[2] * Sn) * k, 24 - b[1] * k]; });
+}
 function iconSVG() {
   if (!S.result) return null;
   const P = S.result.P, md = S.model, c = centroid(P), { u, v, w } = iconBasis(), motion = iconMotion();
@@ -1748,16 +1775,9 @@ function iconSVG() {
     });
     return { lines: segs.length, svg: `${head}<path d="${segs.join('')}"/></svg>` };
   }
-  // animated: one scale for every frame, from the full 3D radius about the vertical, so nothing leaves the frame
-  let R = 0; D.forEach(q => R = Math.max(R, motion === 'turn' ? Math.hypot(q[0], q[2], q[1]) : Math.hypot(Math.abs(q[0]) + Math.abs(q[2]) * Math.sin(ICON_ROCK), q[1])));
-  const k = 21 / (R || 1), n = ICON_KEYS[motion], frames = [];
-  for (let i = 0; i <= n; i++) {
-    const th = motion === 'turn' ? 2 * Math.PI * i / n : ICON_ROCK * Math.sin(2 * Math.PI * i / n);
-    const C = Math.cos(th), Sn = Math.sin(th);
-    frames.push(members.map(m => { const a = D[m.a], b = D[m.b];
-      const ax = a[0] * C + a[2] * Sn, bx = b[0] * C + b[2] * Sn;
-      return `M${f(24 + ax * k)} ${f(24 - a[1] * k)}L${f(24 + bx * k)} ${f(24 - b[1] * k)}`; }).join(''));
-  }
+  // animated: every member in every frame, so the keyframes share one command list and blend smoothly
+  const g = iconMoving(), n = ICON_KEYS[motion], frames = [];
+  for (let i = 0; i <= n; i++) frames.push(iconLines(g, i / n).map(([x1, y1, x2, y2]) => `M${f(x1)} ${f(y1)}L${f(x2)} ${f(y2)}`).join(''));
   const dur = +$('iconLoop').value;
   return { lines: members.length, frames: n, svg: `${head}<path d="${frames[0]}"><animate attributeName="d" dur="${dur}s" repeatCount="indefinite" calcMode="linear" values="${frames.join(';')}"/></path></svg>` };
 }
@@ -1770,12 +1790,48 @@ function iconSync() {
   $('iconInfo').textContent = motion === 'still' ? `${r.lines} lines` : `${r.lines} lines \u00b7 ${(r.svg.length / 1024).toFixed(0)} KB`;
   $('iconLoopRow').hidden = motion === 'still'; $('iconLoopVal').textContent = `${$('iconLoop').value} s`;
   $('iconBack').disabled = motion !== 'still'; // a moving icon shows every line
-  store.set('tw.icon', JSON.stringify({ view: $('iconView').value, stroke: $('iconStroke').value, cables: $('iconCables').checked, back: $('iconBack').checked, motion, loop: $('iconLoop').value }));
+  $('iconPrev').style.color = $('iconColor').value;
+  $('iconGifRow').hidden = $('iconGifOpts').hidden = $('exIconGif').hidden = motion === 'still';
+  // Figma takes GIFs up to 50 megapixels: width x height x frames
+  const sz = +$('iconGifSize').value, nf = Math.max(2, Math.round(+$('iconLoop').value * 100 / S.gifCs)), mp = sz * sz * nf / 1e6;
+  $('iconMP').textContent = `${nf} frames \u00b7 ${mp.toFixed(1)} MP${mp > 50 ? ' (over Figma\u2019s 50)' : ''}`;
+  $('iconMP').style.color = mp > 50 ? 'var(--fail)' : '';
+  store.set('tw.icon', JSON.stringify({ view: $('iconView').value, stroke: $('iconStroke').value, cables: $('iconCables').checked, back: $('iconBack').checked, motion, loop: $('iconLoop').value, color: $('iconColor').value, size: $('iconGifSize').value, matte: $('iconMatte').value }));
 }
-try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; if (o.motion) document.querySelector(`input[name="iconMotion"][value="${o.motion}"]`).checked = true; if (o.loop) $('iconLoop').value = o.loop; } catch (e) {}
+try { const o = JSON.parse(store.get('tw.icon') || '{}'); if (o.view) $('iconView').dataset.want = o.view; if (o.stroke) $('iconStroke').value = o.stroke; if (o.cables === false) $('iconCables').checked = false; if (o.back === false) $('iconBack').checked = false; if (o.motion) document.querySelector(`input[name="iconMotion"][value="${o.motion}"]`).checked = true; if (o.loop) $('iconLoop').value = o.loop; if (o.color) $('iconColor').value = o.color; if (o.size) $('iconGifSize').value = o.size; if (o.matte) $('iconMatte').value = o.matte; } catch (e) {}
 $('iconLoop').addEventListener('input', () => { $('iconLoopVal').textContent = `${$('iconLoop').value} s`; });
-['iconView', 'iconStroke', 'iconCables', 'iconBack', 'iconLoop', 'im_still', 'im_rock', 'im_turn'].forEach(id => $(id).addEventListener('change', () => { $('iconView').dataset.want = $('iconView').value; iconSync(); }));
+$('iconColor').addEventListener('input', () => { $('iconPrev').style.color = $('iconColor').value; });
+['iconView', 'iconStroke', 'iconCables', 'iconBack', 'iconLoop', 'im_still', 'im_rock', 'im_turn', 'iconColor', 'iconGifSize', 'iconMatte'].forEach(id => $(id).addEventListener('change', () => { $('iconView').dataset.want = $('iconView').value; iconSync(); }));
 setInterval(() => { if ($('iconView').value === 'shown' && iconMotion() === 'still' && !document.hidden) iconSync(); }, 400); // follows the camera
+// Icon GIF, for Figma (which drops SVG animation): the same lines drawn at the GIF frame rate, one colour.
+// The palette is the matte plus 8 tints of the colour over it, so edges stay smooth with no quantizing;
+// pixels under 20% coverage are transparent. Frame i is loop phase i / n, so the loop closes.
+$('exIconGif').addEventListener('click', async () => {
+  if (!S.result || exporting || iconMotion() === 'still') return;
+  const btn = $('exIconGif'), size = +$('iconGifSize').value, cs = S.gifCs, n = Math.max(2, Math.round(+$('iconLoop').value * 100 / cs));
+  btn.disabled = true; btn.textContent = 'Loading…';
+  try {
+    const { GIFEncoder } = await loadGif();
+    const ink = hexRgb($('iconColor').value), matte = hexRgb($('iconMatte').value), L = 8;
+    const palette = [matte]; for (let l = 1; l <= L; l++) palette.push(ink.map((x, d) => Math.round(matte[d] + (x - matte[d]) * l / L)));
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const cx = c.getContext('2d', { willReadFrequently: true }), sc = size / 48, g = iconMoving();
+    cx.lineCap = 'round'; cx.lineJoin = 'round'; cx.strokeStyle = '#000'; cx.lineWidth = +$('iconStroke').value * sc;
+    const gif = GIFEncoder(), idx = new Uint8Array(size * size);
+    for (let i = 0; i < n; i++) {
+      cx.clearRect(0, 0, size, size); cx.beginPath();
+      for (const [x1, y1, x2, y2] of iconLines(g, i / n)) { cx.moveTo(x1 * sc, y1 * sc); cx.lineTo(x2 * sc, y2 * sc); }
+      cx.stroke();
+      const a = cx.getImageData(0, 0, size, size).data;
+      for (let p = 0, q = 3; p < idx.length; p++, q += 4) { const v = a[q] / 255; idx[p] = v < 0.2 ? 0 : Math.max(1, Math.round(v * L)); }
+      gif.writeFrame(idx, size, size, { palette, delay: cs * 10, repeat: 0, transparent: true, transparentIndex: 0, dispose: 2 });
+      if (i % 8 === 7) { btn.textContent = `${Math.round((i + 1) / n * 100)}%`; await nextTick(); }
+    }
+    gif.finish();
+    offer(`${baseName()}_icon_${$('iconView').value}_${iconMotion()}_${size}.gif`, new Blob([gif.bytes()], { type: 'image/gif' }));
+  } catch (e) { console.error(e); toast(e.message === 'load' ? 'Couldn’t load the GIF encoder. Check your connection.' : 'Couldn’t make the GIF.'); }
+  btn.disabled = false; btn.textContent = 'Icon GIF';
+});
 $('exIcon').addEventListener('click', () => {
   const r = iconSVG(); if (!r) return;
   offer(`${baseName()}_icon_${$('iconView').value}${iconMotion() === 'still' ? '' : '_' + iconMotion()}.svg`, new Blob([r.svg], { type: 'image/svg+xml' }));
