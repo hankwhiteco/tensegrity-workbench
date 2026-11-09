@@ -196,6 +196,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 /* push-button rows with indicator lamps: radio inputs + labels, or buttons with aria-pressed */
 .seg { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .seg.three { grid-template-columns: repeat(3, 1fr); }
+#axisSeg { grid-template-columns: repeat(var(--n, 4), 1fr); }
 .seg label, .seg button { position: relative; display: grid; justify-items: center; gap: 2px; padding: 15px 4px 8px; cursor: pointer;
              text-align: center; font: 500 12px/1.2 var(--font); border: 0; border-radius: 3px; background: var(--well); color: var(--fg);
              box-shadow: inset 0 -1px 0 var(--line); }
@@ -461,11 +462,29 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 
     <div class="tabpane" data-tab="view" hidden>
     <section>
-      <h2>Display</h2>
+      <h2>Motion</h2>
       <div class="layers">
         <label class="layer"><input type="checkbox" id="bSpin" checked>
           <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
           <span class="meta"><span class="name">Rotate</span><span class="count" id="spinNote">one turn about the vertical</span></span><span class="sw"></span></label>
+      </div>
+      <div class="row"><span class="lbl">Spin axis</span><span class="val" id="axisNote"></span></div>
+      <div class="seg" id="axisSeg" role="group" aria-label="Spin axis"></div>
+      <div class="seg" role="group" aria-label="Spin direction">
+        <button id="dirFwd" aria-pressed="true">Forward</button><button id="dirRev" aria-pressed="false">Reverse</button>
+      </div>
+      <div class="row" id="turnRow">
+        <label for="turnSecs">Turn time</label><span class="val" id="turnVal"></span>
+        <input type="range" id="turnSecs" min="4" max="40" step="1" value="35">
+      </div>
+      <div class="row"><label for="tiltDeg">Tilt</label><span class="val" id="tiltVal"></span><input type="range" id="tiltDeg" min="-85" max="85" step="1"></div>
+      <div class="row"><label for="rollDeg">Roll</label><span class="val" id="rollVal"></span><input type="range" id="rollDeg" min="-180" max="180" step="1" value="0"></div>
+      <div class="row"><label for="wobble">Wobble</label><span class="val" id="wobbleVal"></span><input type="range" id="wobble" min="0" max="30" step="1" value="0"></div>
+    </section>
+
+    <section>
+      <h2>Display</h2>
+      <div class="layers">
         <label class="layer" data-accent><input type="checkbox" id="bForce">
           <svg viewBox="0 0 34 22"><path d="M4 18 L30 4" stroke-width="3"/><path d="M4 4 L30 18" stroke-width="1"/></svg>
           <span class="meta"><span class="name">Forces</span><span class="count">width shows each member's load</span></span><span class="sw"></span></label>
@@ -476,16 +495,13 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           <svg viewBox="0 0 34 22"><circle cx="10" cy="11" r="5" stroke-width="1.2"/><circle cx="23" cy="11" r="8.5" stroke-width="1.2"/></svg>
           <span class="meta"><span class="name">Fixed scale</span><span class="count">sphere grows with repeats</span></span><span class="sw"></span></label>
       </div>
-      <div class="row" id="turnRow">
-        <label for="turnSecs">Turn time</label><span class="val" id="turnVal"></span>
-        <input type="range" id="turnSecs" min="4" max="40" step="1" value="35">
-      </div>
       <div class="row"><span class="lbl">Artboard</span></div>
       <div class="seg three" role="radiogroup" aria-label="Artboard background">
         <input type="radio" name="bg" id="bg_ink" value="ink" checked><label for="bg_ink">Ink</label>
         <input type="radio" name="bg" id="bg_paper" value="paper"><label for="bg_paper">Paper</label>
         <input type="radio" name="bg" id="bg_clear" value="clear"><label for="bg_clear">Clear</label>
       </div>
+      <div class="row"><label for="strutW">Strut weight</label><span class="val" id="strutWVal"></span><input type="range" id="strutW" min="25" max="300" step="5" value="100"></div>
       <div class="row"><span class="lbl">Colours</span><button type="button" class="linkbtn" id="colReset" title="Back to the artboard's own colours">Reset</button></div>
       <div class="grid2 colours">
         <label class="f">Struts<input type="color" id="colStrut" aria-label="Strut colour"></label>
@@ -758,13 +774,15 @@ export default function TensegritySphere(props) {
         const io = new IntersectionObserver((e) => { st.visible = e[0].isIntersecting; if (st.visible) kick() })
         io.observe(el)
 
+        const roll = ((DATA.view.roll || 0) * Math.PI) / 180, rc = Math.cos(roll), rs = Math.sin(roll)
         const project = (yaw, pitch, s, W, H) => {
             const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), dist = 4.2
             for (let i = 0; i < nP; i++) {
                 const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2]
                 const X = cy * x - sy * y, Y = sy * x + cy * y
                 const Y2 = cp * Y - sp * z, Z2 = sp * Y + cp * z, k = dist / (dist + Y2)
-                proj[3 * i] = W / 2 + X * s * k; proj[3 * i + 1] = H / 2 - Z2 * s * k; proj[3 * i + 2] = Y2
+                const sx = X * s * k, sz = Z2 * s * k // roll: the picture turned about the line of sight
+                proj[3 * i] = W / 2 + sx * rc - sz * rs; proj[3 * i + 1] = H / 2 - (sx * rs + sz * rc); proj[3 * i + 2] = Y2
             }
         }
 
@@ -858,7 +876,7 @@ export default function TensegritySphere(props) {
                     st.yaw += st.vy * dt; st.pitch += st.vp * dt
                     const f = Math.exp(-dt * 2.2); st.vy *= f; st.vp *= f
                 }
-                if (p.spin && !p.scrollRotate) st.yaw += (TAU / Math.max(1, p.turnSeconds)) * dt
+                if (p.spin && !p.scrollRotate) st.yaw += (DATA.view.dir || 1) * (TAU / Math.max(1, p.turnSeconds)) * dt
                 st.pitch += (DATA.view.pitch - st.pitch) * (1 - Math.exp(-dt * 0.6)) // drift back to the set angle
             }
             // lean toward the cursor, wherever it is on the page
@@ -1986,7 +2004,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -2043,7 +2061,7 @@ function solve() {
     saveGroupMem();
     if (S.sel >= md.members.length) S.sel = -1;
     if (ANIM.on) stopBuild();
-    fitView(); renderReport(); renderSel(); syncClip(); iconSync();
+    fitView(); renderReport(); renderSel(); syncClip(); iconSync(); ORI = null; syncMotion();
     if (!ANIM.autoDone && S.shown.repeats && !reduce.matches) { ANIM.autoDone = true; startBuild(); }
   });
 }
@@ -2258,9 +2276,37 @@ new ResizeObserver(resize).observe(cv); resize();
 function animZoom() { const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
 // the canvas being drawn: the viewport, or an export frame; STILL: draw without the build's camera
 let PW = 1, PH = 1, STILL = false;
+// Spin axis: the chosen symmetry axis is turned upright (rows B, C, A take the axis A to +z), so the turn goes
+// round it, as in the Dymaxion studio. Wobble swings the tilt (S.wobble degrees, sin of WOB_T / 2); roll turns
+// the picture about the line of sight.
+let ORI = null, oriFor = '', WOB_T = 0;
+function orientation() {
+  const key = S.axis + '|' + (S.result ? S.shown && S.shown.name : '') + '|' + (iconAxes.result === S.result);
+  if (ORI && oriFor === key) return ORI;
+  oriFor = key; ORI = null;
+  const ax = S.axis !== 'v' && S.result ? symmetryAxes().find(x => 'ax' + x.n === S.axis) : null;
+  if (ax) {
+    const A = ax.a, ref = Math.abs(A[2]) > 0.9 ? [1, 0, 0] : [0, 0, 1];
+    const B = norm3([A[1] * ref[2] - A[2] * ref[1], A[2] * ref[0] - A[0] * ref[2], A[0] * ref[1] - A[1] * ref[0]]);
+    const C = [A[1] * B[2] - A[2] * B[1], A[2] * B[0] - A[0] * B[2], A[0] * B[1] - A[1] * B[0]];
+    ORI = [B, C, A];
+  }
+  return ORI;
+}
+const orient = d => { const R = orientation(); return R ? [dot3(R[0], d), dot3(R[1], d), dot3(R[2], d)] : d; };
+const unorient = q => { const R = orientation(); return R ? [0, 1, 2].map(k => q[0] * R[0][k] + q[1] * R[1][k] + q[2] * R[2][k]) : q; };
+const wobbleNow = () => S.wobble ? S.wobble * Math.PI / 180 * Math.sin(WOB_T * 0.5) : 0;
+// the camera's screen right (u), up (w) and toward-the-viewer (v) directions in the structure's own frame
+function viewBasis(withWobble) {
+  const yaw = S.view.yaw, pitch = S.view.pitch + (withWobble ? wobbleNow() : 0), cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  let u = [cy, -sy, 0], w = [sp * sy, sp * cy, cp]; const v = [-cp * sy, -cp * cy, sp];
+  const ro = S.roll * Math.PI / 180, cr = Math.cos(ro), sr = Math.sin(ro);
+  [u, w] = [u.map((x, k) => x * cr - w[k] * sr), u.map((x, k) => x * sr + w[k] * cr)];
+  return { u: unorient(u), w: unorient(w), v: unorient(v) };
+}
 function project(p) {
-  const { yaw, pitch, zoom } = S.view;
-  let x = p[0] - fit.c[0], y = p[1] - fit.c[1], z = p[2] - fit.c[2];
+  const { yaw, zoom } = S.view, pitch = S.view.pitch + wobbleNow();
+  let [x, y, z] = orient([p[0] - fit.c[0], p[1] - fit.c[1], p[2] - fit.c[2]]);
   // z-up world: yaw about z, then pitch about x
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   let X = cy * x - sy * y, Y = sy * x + cy * y, Z = z;
@@ -2275,7 +2321,8 @@ function project(p) {
     project.inner = true; const f = project(zp.focus); project.inner = false;
     const w = (zb - 1) / (zp.amount - 1); ox = w * (f[0] - W / 2); oy = w * (f[1] - H / 2);
   }
-  return [W / 2 + X * s * persp - ox, H / 2 - Z2 * s * persp - oy, Y2];
+  const ro = S.roll * Math.PI / 180, cr = Math.cos(ro), sr = Math.sin(ro), sx = X * s * persp, sz = Z2 * s * persp;
+  return [W / 2 + sx * cr - sz * sr - ox, H / 2 - (sx * sr + sz * cr) - oy, Y2];
 }
 let hover = -1;
 const isCable = g => g.m.kind !== 's';
@@ -2320,7 +2367,7 @@ function draw(c = cv, cx = ctx, o = {}) {
     const isS = s.m.kind === 's';
     const f = Math.abs(v.q[s.k] * S.result.lengths[s.k]) / mf;
     // rods drawn about 1/40 of their length thick, like the reference sculpture
-    const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d));
+    const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d)) * S.strutW;
     let col = isS ? colors.strut : colors.cable, w = isS ? rod : 1.1;
     if (S.force) { col = isS ? colors.com : colors.ten; w = isS ? 2 + 6 * f : 0.6 + 2.8 * f; }
     if (s.k === sel || s.k === hov) { col = colors.sel; }
@@ -2468,7 +2515,7 @@ cv.addEventListener('pointermove', e => {
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy);
     drag.x = e.clientX; drag.y = e.clientY;
-    if (drag.moved > 3) { cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.5, Math.min(1.5, S.view.pitch + dy * 0.008)); }
+    if (drag.moved > 3) { cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.48, Math.min(1.48, S.view.pitch + dy * 0.008)); syncMotion(); }
   } else { hover = ANIM.on ? -1 : pick(e.clientX - b.left, e.clientY - b.top); }
 });
 cv.addEventListener('pointerup', e => {
@@ -2487,7 +2534,38 @@ function syncVE() {
   $('veAxWrap').hidden = $('veLoopWrap').hidden = !(S.ve && S.family === 'sphere');
   if (S.turnSecs) { const P = veCycle(), k = Math.round(S.turnSecs / P); $('veLoopNote').textContent = `one cycle every ${+P.toFixed(1)} s, ${k} per turn`; }
 }
-$('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
+$('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; S.roll = 0; syncMotion(); };
+// motion controls (View > Motion), remembered as tw.motion
+function saveMotion() { store.set('tw.motion', JSON.stringify({ axis: S.axis, dir: S.dir, roll: S.roll, wobble: S.wobble, strutW: S.strutW })); }
+let axisMenuFor = null;
+function axisMenu() { // Vertical, then this structure's own symmetry axes
+  if (!S.result || axisMenuFor === S.result) return; axisMenuFor = S.result;
+  const axes = symmetryAxes(), opts = [['v', 'Vertical', 'as built'], ...axes.map(x => ['ax' + x.n, x.n + '-fold', 'axis'])];
+  if (!opts.some(o => o[0] === S.axis)) S.axis = 'v';
+  $('axisSeg').style.setProperty('--n', opts.length);
+  $('axisSeg').innerHTML = opts.map(([v, t, sm]) => `<button data-axis="${v}" aria-pressed="${v === S.axis}">${t}<small>${sm}</small></button>`).join('');
+  $('axisSeg').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.axis = b.dataset.axis; ORI = null; syncMotion(); saveMotion(); }));
+}
+function syncMotion() {
+  axisMenu();
+  $('axisSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.axis === S.axis)));
+  $('axisNote').textContent = S.axis === 'v' ? 'turns about the vertical' : `turns about a ${S.axis.slice(2)}-fold axis`;
+  $('dirFwd').setAttribute('aria-pressed', String(S.dir > 0)); $('dirRev').setAttribute('aria-pressed', String(S.dir < 0));
+  const tilt = Math.round(-S.view.pitch * 180 / Math.PI);
+  $('tiltDeg').value = tilt; $('tiltVal').textContent = `${tilt}\u00b0 ${tilt >= 0 ? 'from above' : 'from below'}`;
+  $('rollDeg').value = S.roll; $('rollVal').textContent = S.roll ? `${S.roll}\u00b0` : 'none';
+  $('wobble').value = S.wobble; $('wobbleVal').textContent = S.wobble ? `\u00b1${S.wobble}\u00b0` : 'off';
+  $('strutW').value = Math.round(S.strutW * 100); $('strutWVal').textContent = Math.round(S.strutW * 100) + '%';
+}
+$('dirFwd').addEventListener('click', () => { S.dir = 1; syncMotion(); saveMotion(); });
+$('dirRev').addEventListener('click', () => { S.dir = -1; syncMotion(); saveMotion(); });
+$('tiltDeg').addEventListener('input', e => { S.view.pitch = -(+e.target.value) * Math.PI / 180; syncMotion(); });
+$('rollDeg').addEventListener('input', e => { S.roll = +e.target.value; syncMotion(); saveMotion(); });
+$('wobble').addEventListener('input', e => { S.wobble = +e.target.value; syncMotion(); saveMotion(); });
+$('strutW').addEventListener('input', e => { S.strutW = +e.target.value / 100; syncMotion(); saveMotion(); });
+try { const m = JSON.parse(store.get('tw.motion') || '{}');
+  if (typeof m.axis === 'string') S.axis = m.axis; if (m.dir === -1) S.dir = -1;
+  if (m.roll >= -180 && m.roll <= 180) S.roll = +m.roll; if (m.wobble >= 0 && m.wobble <= 30) S.wobble = +m.wobble; if (m.strutW >= 0.25 && m.strutW <= 3) S.strutW = +m.strutW; } catch (e) {}
 function legend() {
   $('legend').innerHTML = S.force
     ? `<span><i style="background:var(--vp-compress)"></i>compression</span><span><i style="background:var(--vp-tension);height:2px"></i>tension (width = force)</span>`
@@ -2744,7 +2822,7 @@ function animCaption() {
 function beginBuild() { // the build's state only, no UI (the build clip export uses this too)
   ANIM.plan = makePlan(); ANIM.on = true; ANIM.playing = true; ANIM.t = 0; ANIM.endClock = undefined;
   // turn the camera so the starting five-fold axis faces the viewer
-  const f = ANIM.plan.face;
+  const f = ANIM.plan.face && orient(ANIM.plan.face);
   if (f) { const r = Math.hypot(f[0], f[1]); ANIM.viewFrom = { yaw: S.view.yaw, pitch: S.view.pitch }; ANIM.viewTo = { yaw: Math.atan2(-f[0], -f[1]), pitch: Math.atan2(f[2], r) }; ANIM.viewT = 0; }
   else ANIM.viewTo = null;
 }
@@ -2885,10 +2963,12 @@ function setProgress(u, label) {
 function framer(plan, fps, size) {
   const d = exportScale(size);
   if (plan.kind === 'turn') {
-    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T;
+    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T, wob0 = WOB_T;
+    const wobCycles = S.wobble ? Math.max(1, Math.round(plan.T / (4 * Math.PI))) : 0; // whole wobbles per turn, so it loops
     return i => {
       const u = i / plan.n;
-      S.view.yaw = yaw0 + 2 * Math.PI * u;
+      S.view.yaw = yaw0 + S.dir * 2 * Math.PI * u;
+      if (wobCycles) WOB_T = wob0 + u * wobCycles * 4 * Math.PI;
       let base;
       if (gives) { // blend with the pose one turn earlier: at u = 1 this is exactly frame 0 again
         const A = idlePose(t0 + u * plan.T), B = idlePose(t0 + u * plan.T - plan.T);
@@ -2912,7 +2992,7 @@ async function runExport(kind) {
   if (!plan) return;
   const size = +$('motionSize').value;
   // everything a clip moves, so the view comes back exactly as it was
-  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, result: S.result,
+  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, WOB_T, result: S.result,
     anim: { on: ANIM.on, playing: ANIM.playing, t: ANIM.t, plan: ANIM.plan, viewT: ANIM.viewT, viewFrom: ANIM.viewFrom, viewTo: ANIM.viewTo, endClock: ANIM.endClock } };
   exporting = { kind, cancel: false };
   const btn = kind === 'gif' ? $('exGif') : $('exMp4');
@@ -2930,7 +3010,7 @@ async function runExport(kind) {
       blob = kind === 'gif' ? await encodeGif(lib, plan, c, cx, frame, fps) : await encodeMp4(lib, plan, c, cx, frame, fps);
     }
   } catch (e) { failed = e; console.error(e); }
-  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T;
+  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T; WOB_T = saved.WOB_T;
   if (S.result === saved.result) Object.assign(ANIM, saved.anim);
   else if (ANIM.on) stopBuild(); // a new solve arrived meanwhile: the old build no longer fits
   if (ANIM.on && ANIM.plan) animCaption();
@@ -3075,10 +3155,7 @@ function iconViews() { // rebuild the view menu for this structure, keeping the 
 const ICON_ROCK = 28 * Math.PI / 180, ICON_KEYS = { rock: 40, turn: 72 };
 function iconBasis() {
   const view = $('iconView').value;
-  if (view === 'shown') {
-    const cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
-    return { u: [cy, -sy, 0], w: [sp * sy, sp * cy, cp], v: [-cp * sy, -cp * cy, sp] };
-  }
+  if (view === 'shown') return viewBasis(false);
   const ax = symmetryAxes().find(x => 'ax' + x.n === view);
   const v = view === 'top' ? [0, 0, 1] : view === 'front' ? [0, -1, 0] : ax ? ax.a : [0, 0, 1];
   const ref = Math.abs(v[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
@@ -3201,7 +3278,7 @@ function framerData() {
   const r = S.result, md = S.model, c = centroid(r.P);
   let R = 0; r.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
   const r4 = v => Math.round(v * 1e4) / 1e4, r3 = v => Math.round(v * 1e3) / 1e3;
-  const P = []; r.P.forEach(p => P.push(r4((p[0] - c[0]) / R), r4((p[1] - c[1]) / R), r4((p[2] - c[2]) / R)));
+  const P = []; r.P.forEach(p => { const q = orient(sub3(p, c)); P.push(r4(q[0] / R), r4(q[1] / R), r4(q[2] / R)); });
   const M = []; md.members.forEach(m => M.push(m.a, m.b, m.kind === 's' ? 1 : 0));
   let pl = null; try { pl = makePlan(); } catch (e) { pl = null; }
   const B = md.members.map((m, k) => {
@@ -3211,7 +3288,7 @@ function framerData() {
   });
   let sl = 0, sn = 0; md.members.forEach((m, k) => { if (m.kind === 's') { sl += r.lengths[k]; sn++; } });
   return { name: S.shown.name, P, M, B, end: pl ? r3(pl.end) : 0, strut: r4(sn ? sl / sn / R : 0.3),
-    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch) }, interact: { ...S.web },
+    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch), roll: S.roll, dir: S.dir }, interact: { ...S.web, strutWidth: Math.round(S.strutW * 100) },
     style: { background: exportFill() || 'rgba(0, 0, 0, 0)', strut: colors.strut, cable: colors.cable, highlight: colors.sel,
       turn: S.turnSecs, shade: Math.round(S.shade * 100), cableOpacity: Math.round(Math.min(1, S.cable) * 100) } };
 }
@@ -3374,9 +3451,9 @@ function step(dt, ui) {
     const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
     let dy = ((b.yaw - a.yaw) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
     S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
-  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
+  } else if (S.spin && !drag) S.view.yaw += S.dir * dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
-  GIVE_T += dt; VE_T += dt;
+  GIVE_T += dt; VE_T += dt; WOB_T += dt;
   if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }
 }
 requestAnimationFrame(frame);
@@ -3509,8 +3586,7 @@ function copyText(get, what) {
 }
 function thumbSVG() { // a tiny flat drawing of the shape as it is shown, struts only, for the list
   if (!S.result) return '';
-  const P = S.result.P, c = centroid(P), cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
-  const u = [cy, -sy, 0], w = [sp * sy, sp * cy, cp], Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w)]; });
+  const P = S.result.P, c = centroid(P), { u, w } = viewBasis(false), Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w)]; });
   let R = 0; Q.forEach(q => R = Math.max(R, Math.hypot(...q)));
   const k = 10 / (R || 1), f = x => Math.round(x * 10) / 10;
   const d = S.model.members.filter(m => m.kind === 's').map(m => `M${f(12 + Q[m.a][0] * k)} ${f(12 - Q[m.a][1] * k)}L${f(12 + Q[m.b][0] * k)} ${f(12 - Q[m.b][1] * k)}`).join('');
