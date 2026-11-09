@@ -2413,9 +2413,7 @@ function draw(c = cv, cx = ctx, o = {}) {
   const zk = Math.max(0, Math.min(1, S.view.zoom * animZoom() - 1)), Dc = camD();
   const mf = maxForce();
   ctx.lineCap = 'round';
-  let innerDone = !INNER.img;
-  for (const s of segs) {
-    if (!innerDone && s.z < 0) { drawInner(ctx, d); innerDone = true; } // the centre's depth: behind here is behind the image
+  const drawSeg = (s, am) => {
     const depth = zmax > zmin ? (s.z - zmin) / (zmax - zmin) : 0.5; // 0 near, 1 far
     const alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * (isCable(s) ? Math.min(1, S.cable) : 1);
     const isS = s.m.kind === 's';
@@ -2430,16 +2428,16 @@ function draw(c = cv, cx = ctx, o = {}) {
     if (s.k === sel || s.k === hov) { col = colors.sel; }
     if (!isS && v.q[s.k] <= 1e-9) { ctx.setLineDash([4 * d, 4 * d]); } else ctx.setLineDash([]);
     const fa = fr ? fr.alpha[s.k] : 1;
-    ctx.globalAlpha = (s.k === sel ? 1 : alpha) * fa;
+    ctx.globalAlpha = (s.k === sel ? 1 : alpha) * fa * am;
     if (!isS && S.cable > 1 && !S.force && col === colors.cable) col = mixColor(colors.cable, colors.strut, Math.min(1, S.cable - 1));
     ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : (fr ? fr.cw[s.k] : 1));
     ctx.beginPath();
     const cv3 = fr && fr.curve[s.k], sk3 = fr && fr.stroke[s.k];
     if (sk3) { // strut drawing itself out from a joint
       const a3 = fr.P[sk3.from], b3 = fr.P[sk3.to], tip = project([0, 1, 2].map(d => a3[d] + (b3[d] - a3[d]) * sk3.r)), a2 = project(a3);
-      if (tip[3] <= near || a2[3] <= near) continue;
+      if (tip[3] <= near || a2[3] <= near) return;
       ctx.moveTo(a2[0], a2[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
-      ctx.save(); ctx.globalAlpha = sk3.thin ? 0.5 * fa : 0.9; ctx.fillStyle = colors.strut; ctx.beginPath(); ctx.arc(tip[0], tip[1], (sk3.thin ? 1 : 1.6) * d, 0, 7); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = (sk3.thin ? 0.5 * fa : 0.9) * am; ctx.fillStyle = colors.strut; ctx.beginPath(); ctx.arc(tip[0], tip[1], (sk3.thin ? 1 : 1.6) * d, 0, 7); ctx.fill(); ctx.restore();
       ctx.beginPath();
     } else if (cv3) { // thread still unspooling or slack: draw it as a curve, only as far as it has reached
       const c = project(cv3.ctl), n = 18, upto = Math.max(1, Math.round(n * cv3.reveal));
@@ -2449,11 +2447,28 @@ function draw(c = cv, cx = ctx, o = {}) {
     } else { ctx.moveTo(s.a[0], s.a[1]); ctx.lineTo(s.b[0], s.b[1]); }
     ctx.stroke();
     if (fr && fr.glow[s.k] > 0.01) { // pieces that just arrived glow, then cool to their normal colour
-      ctx.globalAlpha = fa * fr.glow[s.k]; ctx.strokeStyle = colors.sel; ctx.stroke();
+      ctx.globalAlpha = fa * fr.glow[s.k] * am; ctx.strokeStyle = colors.sel; ctx.stroke();
     }
+  };
+  if (!INNER.img) segs.forEach(s => drawSeg(s, 1));
+  else {
+    // The image sits at the centre's depth (0). A member does not jump from behind it to in front: within a band
+    // either side of the centre (a third of the joint radius) it is drawn under the image and also over it, the
+    // copy on top fading in as it comes forward. Members wholly behind the band stay under, wholly in front over.
+    let Rj = 0; S.result.P.forEach(p => Rj = Math.max(Rj, Math.hypot(p[0] - fit.c[0], p[1] - fit.c[1], p[2] - fit.c[2])));
+    // How far behind the image each member is (world units, + = behind). Faces you: the depth from the centre.
+    // Turns with it: the distance through the panel's plane to the camera's side, eased toward 0 as the panel turns
+    // edge-on, so the side a member is on never flips at once.
+    const vb = viewBasis(true), N = S.inner.mode === 'face' ? vb.v : unorient([0, 1, 0]), facing = Math.max(-1, Math.min(1, 3 * dot3(vb.v, N)));
+    const behind = s => { const a = base[s.m.a], b = base[s.m.b], mid = [0, 1, 2].map(k => (a[k] + b[k]) / 2 - fit.c[k]); return -dot3(mid, N) * (S.inner.mode === 'face' ? 1 : facing); };
+    const band = Rj / 3, front = z => ease(clamp01((band - z) / (2 * band)));
+    for (const s of segs) s.bz = behind(s);
+    segs.forEach(s => { if (s.bz > -band) drawSeg(s, 1); });
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    drawInner(ctx, d);
+    segs.forEach(s => { if (s.bz < band) drawSeg(s, front(s.bz)); });
   }
   ctx.setLineDash([]); ctx.globalAlpha = 1;
-  if (!innerDone) drawInner(ctx, d);
   if (fr && fr.marks.length) { // joint markers
     ctx.strokeStyle = colors.strut; ctx.lineWidth = 0.8 * d;
     const rr = (fit.strut || 1) * 0.022;
