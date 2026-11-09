@@ -292,6 +292,14 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .pre-act.pin.on { color: var(--accent); }
 .pre-act:focus-visible, .pre-name:focus-visible, .pre-pin:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pre-empty { margin: 0; font-size: 12px; color: var(--muted); }
+.pre-empty a { color: inherit; }
+.pre-ex { display: grid; gap: 1px; padding: 6px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--fg); text-align: left; cursor: pointer; }
+.pre-ex:first-child { border-top: 0; }
+.pre-ex b { font: 500 12.5px var(--font); }
+.pre-ex b i { font-style: normal; font-weight: 400; font-size: 10.5px; color: var(--accent); margin-left: 6px; }
+.pre-ex small { font-size: 11px; line-height: 1.35; color: var(--muted); }
+.pre-ex:hover b { text-decoration: underline; }
+.pre-ex:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pre-share { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
 .linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: 500 12px var(--font); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkbtn:hover { color: var(--accent); }
@@ -441,16 +449,6 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       <h2>Member lengths</h2>
       <table class="groups"><tbody id="groups"></tbody></table>
       <p class="note">Cables are fixed lengths. Struts marked grow share one scale and keep these ratios. Click any member in the view to set it on its own.</p>
-    </section>
-
-    <section>
-      <h2>From Pars' pages</h2>
-      <div class="presets">
-        <button class="btn" id="pDiss">Dissimilar 3-strut<small>Cables 20.44, two struts fixed at 26.0. Pars finds 36.3 for the third.</small></button>
-        <button class="btn" id="pTetra">Truncated tetrahedron<small>Rings b = 20, cross cables c = 20. Compared with his eq. 18&#x2013;22.</small></button>
-        <button class="btn" id="pTetraC">Tetrahedron, long cross cables<small>b = 20, c = 30. Longer c, longer struts.</small></button>
-      </div>
-      <p class="note">Method from Marcelo Pars, <a href="http://www.tensegriteit.nl/e-wiskunde4.html" target="_blank" rel="noopener">tetrahedron</a> and <a href="http://www.tensegriteit.nl/e-wiskunde5.html" target="_blank" rel="noopener">dissimilar</a>.</p>
     </section>
 
     <section>
@@ -674,6 +672,9 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
   <div class="pre-head"><h3>Shape presets</h3><button type="button" class="pre-act" id="preClose" aria-label="Close presets">&#xd7;</button></div>
   <div class="pre-label">Pinned <span>Shift + 1 to 4</span></div>
   <div class="pre-pins" id="prePins"></div>
+  <div class="pre-label">Examples <span>built in</span></div>
+  <div class="pre-list" id="preExamples"></div>
+  <p class="pre-empty">Pars' method and figures: <a href="http://www.tensegriteit.nl/e-wiskunde4.html" target="_blank" rel="noopener">tetrahedron</a>, <a href="http://www.tensegriteit.nl/e-wiskunde5.html" target="_blank" rel="noopener">dissimilar</a>.</p>
   <div class="pre-label">Save this shape</div>
   <div class="pre-field"><input type="text" id="preName" placeholder="Name it" maxlength="40" autocomplete="off"><button type="button" class="btn primary" id="preSave">Save</button></div>
   <div class="pre-label">Saved <span>in this browser</span></div>
@@ -3401,16 +3402,30 @@ $('chirR').onclick = () => setChir(1); $('chirL').onclick = () => setChir(-1);
 $('units').addEventListener('input', e => { S.units = e.target.value.slice(0, 8) || 'cm'; renderGroups(); if (S.result) { renderReport(); renderSel(); } });
 $('dia').addEventListener('input', e => { const v = parseFloat(e.target.value); if (v >= 0) { S.dia = v; if (S.result) renderReport(); } });
 
-$('pDiss').onclick = () => {
-  setFamily('prism', 3);
-  ['bot', 'top', 'side'].forEach(g => { S.struct.groups[g].len = 20.44; S.struct.groups[g].touched = true; }); saveGroupMem();
-  const st = S.struct.members.map((m, i) => m.kind === 's' ? i : -1).filter(i => i >= 0);
-  S.over[st[0]] = { mode: 'fixed', len: 26 }; S.over[st[1]] = { mode: 'fixed', len: 26 };
-  S.sel = st[2]; renderGroups(); solveSoon(0);
-};
-function tetraPreset(b, c) { setFamily('tetra'); Object.assign(S.struct.groups.ring, { len: b, touched: true }); Object.assign(S.struct.groups.cross, { len: c, touched: true }); saveGroupMem(); renderGroups(); solveSoon(0); }
-$('pTetra').onclick = () => tetraPreset(20, 20);
-$('pTetraC').onclick = () => tetraPreset(20, 30);
+// Built-in examples (Presets panel): Pars' worked cases, then classics the solver builds well. Each starts from
+// the generator's own lengths, not this browser's edited ones, and right-handed.
+function fresh(o) {
+  if (o.n) S.n = o.n; if (o.k) S.k = o.k; if (o.f !== undefined) S.f = o.f; if (o.pat) S.pat = o.pat;
+  S.chir = 1; $('chirR').setAttribute('aria-pressed', 'true'); $('chirL').setAttribute('aria-pressed', 'false');
+  delete S.groupMem[o.family === 'sphere' ? 'sphere-' + S.pat : o.family];
+  setFamily(o.family); saveGroupMem();
+}
+const lens = (vals) => { for (const [g, v] of Object.entries(vals)) Object.assign(S.struct.groups[g], { len: v, touched: true }); saveGroupMem(); renderGroups(); solveSoon(0); };
+const EXAMPLES = [
+  { id: 'dissimilar', name: 'Dissimilar 3-strut', by: 'Pars', note: 'Cables 20.44, two struts fixed at 26.0. Pars finds 36.3 for the third.', run() {
+    fresh({ family: 'prism', n: 3 }); lens({ bot: 20.44, top: 20.44, side: 20.44 });
+    const st = S.struct.members.map((m, i) => m.kind === 's' ? i : -1).filter(i => i >= 0);
+    S.over[st[0]] = { mode: 'fixed', len: 26 }; S.over[st[1]] = { mode: 'fixed', len: 26 }; S.sel = st[2]; solveSoon(0); } },
+  { id: 'tetra', name: 'Truncated tetrahedron', by: 'Pars', note: 'Rings b = 20, cross cables c = 20. Compare his eq. 18\u201322.', run() { fresh({ family: 'tetra' }); lens({ ring: 20, cross: 20 }); } },
+  { id: 'tetraLong', name: 'Tetrahedron, long cross cables', by: 'Pars', note: 'b = 20, c = 30. Longer c, longer struts.', run() { fresh({ family: 'tetra' }); lens({ ring: 20, cross: 30 }); } },
+  { id: 'simplex', name: 'Simplex', note: 'The 3-strut prism with equal cables, the smallest tensegrity. The rings turn 30\u00b0.', run() { fresh({ family: 'prism', n: 3 }); } },
+  { id: 'octa6', name: 'Expanded octahedron', note: '6 struts, 24 equal cables. Strut to cable is \u221a(8/3) = 1.633.', run() { fresh({ family: 'icosa6' }); } },
+  { id: 'sphere30', name: '30-strut sphere', note: 'Truncated icosahedron: each vertex a ring of cables.', run() { fresh({ family: 'icosa' }); } },
+  { id: 'tower', name: 'Snelson tower', note: 'Three-way column, 4 modules of alternating hand.', run() { fresh({ family: 'tower', n: 3, k: 4 }); } },
+  { id: 'reference', name: 'Reference sphere', note: 'Ring joints, 120 struts: closest to the studio photo.', run() { fresh({ family: 'sphere', f: 2, pat: 'geo' }); } },
+  { id: 'sphere750', name: '750-strut sphere', note: 'Triangle joints, the largest size. Its struts pass close: at the default 1.2 cm the build check flags them.', run() { fresh({ family: 'sphere', f: 10, pat: 'gold' }); } },
+];
+function runExample(id) { const x = EXAMPLES.find(e => e.id === id); if (x) { x.run(); toast(`Example \u00b7 ${x.name}`); } }
 
 // benchmarks
 runJob({ bench: true }, data => {
@@ -3529,6 +3544,14 @@ function renderPresets() {
     list.append(row);
   });
   $('preEmpty').hidden = presets.length > 0;
+  const ex = $('preExamples');
+  if (!ex.children.length) EXAMPLES.forEach(x => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pre-ex';
+    b.innerHTML = '<b></b><small></small>'; b.firstChild.textContent = x.name;
+    if (x.by) { const t = document.createElement('i'); t.textContent = x.by; b.firstChild.append(t); }
+    b.lastChild.textContent = x.note; b.addEventListener('click', () => runExample(x.id));
+    ex.append(b);
+  });
 }
 function placePresets() { // under the masthead key, right-aligned to it when it fits, always on screen
   const r = $('presetsBtn').getBoundingClientRect(), box = $('presetsPop').style, w = Math.min(340, innerWidth - 24);
@@ -3562,7 +3585,7 @@ $('preCopyLink').addEventListener('click', () => { const c = currentCode(); copy
 // start on the Pars dissimilar example so the first view shows the method
 const f0 = store.get('tw.family');
 S.n = Math.max(3, Math.min(12, parseInt(store.get('tw.n')) || 3)); { const z = parseInt(store.get('tw.size')); S.f = z >= 0 && z < TG.SPHERE_SIZES.length ? z : 2; } S.pat = store.get('tw.pat') === 'gold' ? 'gold' : 'geo'; S.k = Math.max(2, Math.min(10, parseInt(store.get('tw.k')) || 4));
-if (!f0 || f0 === 'sphere') setFamily('sphere'); else if (f0 !== 'prism') setFamily(f0); else $('pDiss').onclick();
+if (!f0 || f0 === 'sphere') setFamily('sphere'); else if (f0 !== 'prism') setFamily(f0); else EXAMPLES[0].run();
 if (/#p=tw1\./.test(location.hash)) loadCode(location.hash).then(ok => { if (ok) history.replaceState(null, '', location.pathname + location.search); });
 })();
 </script>
