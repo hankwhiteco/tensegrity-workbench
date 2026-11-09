@@ -150,6 +150,7 @@ label.f { display: grid; gap: 6px; font-weight: 500; }
 select, input[type="number"], input[type="text"] { height: 34px; border-radius: 3px; border: 0; background: var(--well); color: var(--fg);
          font: 400 12.5px var(--font); padding: 0 9px; box-shadow: inset 0 -1px 0 var(--line); min-width: 0; width: 100%; }
 input[type="number"] { font-variant-numeric: tabular-nums; }
+input[type="number"]:invalid { box-shadow: inset 0 -1px 0 var(--line); outline: none; }
 input:disabled { opacity: .45; }
 select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
@@ -1998,7 +1999,7 @@ function renderGroups() {
     const val = g.kind === 'c' ? g.len : g.ratio;
     tr.innerHTML = `<td><span class="swatch ${g.kind}"></span>${g.label} <span class="cnt">\u00d7${count}</span></td>
       <td><label class="f" style="display:block"><span class="sr" hidden>${g.label}</span>
-      <input type="number" id="g_${id}" step="${g.kind === 'c' ? 0.1 : 0.05}" min="0.01" value="${val}" aria-label="${g.label} ${g.kind === 'c' ? 'length' : 'ratio'}"></label></td>`;
+      <input type="number" id="g_${id}" step="${g.kind === 'c' ? 1 : 0.05}" min="0" value="${val}" aria-label="${g.label} ${g.kind === 'c' ? 'length' : 'ratio'}"></label></td>`;
     tb.appendChild(tr);
     const inp = tr.querySelector('input');
     if (g.kind === 's') inp.title = 'Relative length of growing struts';
@@ -2022,8 +2023,8 @@ function renderSel() {
   el.innerHTML = `<div class="row"><span class="t">${isS ? 'Strut' : 'Cable'} ${S.sel}</span><span style="color:var(--muted)">nodes ${m.a}\u2013${m.b} \u00b7 ${esc(g.label)}</span></div>
     <div class="row"><span>${fmt(L)} ${esc(S.units)}</span><span style="color:var(--muted)">force ${fmt(Math.abs(q * L) / maxForce(), 3)} ${isS ? 'compression' : 'tension'}</span></div>
     ${isS ? `<div class="row"><div class="seg" role="group" aria-label="Strut length mode"><button id="mGrow" aria-pressed="${m.mode === 'grow'}">Grow</button><button id="mFix" aria-pressed="${m.mode === 'fixed'}">Fixed</button></div>
-      <input type="number" id="selLen" step="0.1" min="0.01" value="${m.mode === 'fixed' ? m.len : fmt(L)}" ${m.mode === 'grow' ? 'disabled' : ''} aria-label="Fixed strut length"></div>`
-    : `<div class="row"><label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Length <input type="number" id="selLen" step="0.1" min="0.01" value="${m.len}"></label></div>`}
+      <input type="number" id="selLen" step="1" min="0" value="${m.mode === 'fixed' ? m.len : fmt(L)}" ${m.mode === 'grow' ? 'disabled' : ''} aria-label="Fixed strut length"></div>`
+    : `<div class="row"><label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Length <input type="number" id="selLen" step="1" min="0" value="${m.len}"></label></div>`}
     <div class="row"><button class="btn sm" id="selReset">Use group value</button><button class="btn sm" id="selClose">Deselect</button></div>`;
   const i = S.sel;
   if (isS) {
@@ -3241,6 +3242,14 @@ $('wvExport').addEventListener('click', () => $('exFramer').click());
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('webview').hidden) closePreview(); });
 $('exMp4').addEventListener('click', () => runExport('mp4'));
 syncClip();
+// Shift + arrow steps ten times as far in any number field (lengths step 1, so 10)
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (!e.shiftKey || !(t instanceof HTMLInputElement) || t.type !== 'number' || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault();
+  for (let i = 0; i < 10; i++) e.key === 'ArrowUp' ? t.stepUp() : t.stepDown();
+  t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true }));
+});
 // ---------- panel tabs ----------
 function setTab(t) {
   if (!['design', 'view', 'export'].includes(t)) t = 'design';

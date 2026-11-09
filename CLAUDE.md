@@ -67,6 +67,7 @@ Short, direct replies. No em dashes. No corporate or AI-sounding language.
 - The draw loop must never stop on a bad frame.
 - One solve at a time: a new solve terminates the worker running the old one and starts a fresh worker (`cancelInFlight`). Pick the worker after cancelling, never before. Benchmarks run on their own worker. Stale queued solves were why towers looked stuck.
 - Member lengths are remembered per family (sphere per pattern), but only groups the user edited (`touched`), so changing struts, modules, repeats or twist keeps them, and untouched groups still take each size's defaults. Saved in localStorage (`tw.lengths`) on every edit.
+- Length fields step by whole units (step 1, min 0, so 17.71 steps to 18 or 17); typed decimals are still used (the field is 'invalid' to the browser, styled as normal). Strut ratios keep step 0.05. Shift + arrow steps ten at a time in any number field.
 - Known gap: towers with more than 3 struts per module, or odd module counts, have slack cables at the default lengths. The interstage pattern needs work for wider modules. Tighten slack cables rescues many.
 
 ## Build animation
