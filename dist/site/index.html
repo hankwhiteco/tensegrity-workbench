@@ -263,6 +263,38 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .panel .tabs button { padding-block: 14px 7px; }
 .tabpane > section:last-child { border-bottom: 0; }
 @media (max-width: 900px) { .panel .tabs { margin-inline: -16px; padding-inline: 16px; } }
+/* shape presets: a small panel under the masthead key (same as the Dymaxion studio's presets) */
+.presets-pop { position: fixed; z-index: 30; width: 340px; max-width: calc(100vw - 24px); max-height: min(78vh, 640px); overflow-y: auto;
+               display: grid; gap: 10px; padding: 14px 16px 16px; border-radius: 6px; background: var(--panel); color: var(--fg);
+               box-shadow: 0 0 0 1px var(--line), 0 14px 36px rgba(0, 0, 0, .4); }
+.pre-head { display: flex; align-items: center; justify-content: space-between; }
+.pre-head h3 { margin: 0; font: 500 14px var(--font); }
+.pre-label { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.pre-pins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.pre-pin { display: grid; gap: 3px; min-width: 0; padding: 7px 8px; border: 0; border-radius: 3px; background: var(--well); color: var(--fg);
+           font: 500 11.5px var(--font); text-align: left; cursor: pointer; box-shadow: inset 0 -1px 0 var(--line); }
+.pre-pin:hover { background: var(--line); }
+.pre-pin kbd { font: 400 10px var(--font); color: var(--muted); }
+.pre-pin span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pre-pin.empty { background: none; color: var(--muted); cursor: default; box-shadow: inset 0 0 0 1px var(--line); }
+.pre-field { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.pre-list { display: grid; }
+.pre-row { display: grid; grid-template-columns: 22px 1fr auto auto auto; align-items: center; gap: 6px; padding: 3px 0; border-top: 1px solid var(--line); }
+.pre-row:first-child { border-top: 0; }
+.pre-thumb { width: 22px; height: 22px; color: var(--accent); }
+.pre-thumb svg { width: 22px; height: 22px; display: block; }
+.pre-name { min-width: 0; padding: 5px 0; border: 0; background: none; color: var(--fg); font: 400 12.5px var(--font); text-align: left;
+            cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pre-name small { color: var(--muted); margin-left: 6px; }
+.pre-name:hover { text-decoration: underline; }
+.pre-act { padding: 4px 5px; border: 0; background: none; color: var(--muted); font: 400 12px var(--font); cursor: pointer; }
+.pre-act:hover { color: var(--fg); }
+.pre-act.pin.on { color: var(--accent); }
+.pre-act:focus-visible, .pre-name:focus-visible, .pre-pin:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pre-empty { margin: 0; font-size: 12px; color: var(--muted); }
+.pre-share { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
+.linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: 500 12px var(--font); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.linkbtn:hover { color: var(--accent); }
 /* icon export: a flat single-stroke drawing with a live preview */
 .icon-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: start; }
 .icon-prev { width: 96px; height: 96px; border-radius: 3px; background: var(--well); color: var(--accent); display: grid; place-items: center; box-shadow: inset 0 -1px 0 var(--line); }
@@ -299,6 +331,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       <span class="hint">Drag to turn &#xb7; scroll to zoom &#xb7; click a member to set it</span>
       <div class="mast-r">
         <button class="btn sm" id="bReset">Reset view</button>
+        <button class="btn sm" id="presetsBtn" aria-haspopup="dialog" aria-expanded="false" title="Save shapes, and share them as a code or link">Presets</button>
         <button class="btn sm" id="bIconPeek" aria-pressed="false" title="Show the icon export on the artboard while you work">Icon</button>
         <button class="btn sm" id="bFull" aria-pressed="false" title="Hide the panel and the details so the structure fills the window">Full view</button>
       </div>
@@ -626,6 +659,20 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
       <p class="note">Colours, shading and turn time come from the workbench view. In Framer every setting here is in the component's properties panel.</p>
     </section>
   </aside>
+</div>
+<div class="presets-pop" id="presetsPop" role="dialog" aria-label="Shape presets" hidden>
+  <div class="pre-head"><h3>Shape presets</h3><button type="button" class="pre-act" id="preClose" aria-label="Close presets">&#xd7;</button></div>
+  <div class="pre-label">Pinned <span>Shift + 1 to 4</span></div>
+  <div class="pre-pins" id="prePins"></div>
+  <div class="pre-label">Save this shape</div>
+  <div class="pre-field"><input type="text" id="preName" placeholder="Name it" maxlength="40" autocomplete="off"><button type="button" class="btn primary" id="preSave">Save</button></div>
+  <div class="pre-label">Saved <span>in this browser</span></div>
+  <div class="pre-list" id="preList"></div>
+  <p class="pre-empty" id="preEmpty">Nothing saved yet.</p>
+  <div class="pre-label">Load a code</div>
+  <div class="pre-field"><input type="text" id="preCode" placeholder="Paste a shape code or link" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="preLoad">Load</button></div>
+  <div class="pre-share"><button type="button" class="linkbtn" id="preCopyCode">Copy this shape as a code</button><button type="button" class="linkbtn" id="preCopyLink">Copy a link</button></div>
+  <p class="pre-empty">A code holds the shape: family, size, twist, every member length and any single-member changes. Not the view or export settings.</p>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -3345,10 +3392,151 @@ runJob({ bench: true }, data => {
     + `<tr><td colspan="3" class="hint">* Pars' closed form, maximised numerically over \u03c6. Dissimilar value from his worked example (cm).</td></tr>` : '<tr><td colspan="3">Benchmarks need Web Workers.</td></tr>';
 }, { bench: true });
 
+// ---------- shape presets ----------
+// A preset is the shape: family and its size options, twist, every member group's length or ratio and mode, the
+// single-member changes, units and strut diameter. As a code it is that JSON, compressed (deflate) and written in
+// URL-safe base64 after "tw1." (the Dymaxion studio's scheme, "ds1."). Presets are saved by name in this browser, up
+// to four pinned to Shift + 1 to 4, and travel as a code to paste or a link (#p=tw1....) that opens with the shape.
+const PKEY = 'tw.presets', MAX_PINS = 4;
+let presets = [];
+try { presets = JSON.parse(store.get(PKEY) || '[]').filter(q => q && typeof q.code === 'string' && typeof q.name === 'string'); } catch (e) {}
+const savePresets = () => store.set(PKEY, JSON.stringify(presets));
+const b64u = bytes => { let t = ''; for (const x of bytes) t += String.fromCharCode(x); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
+const squeeze = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+const r4 = v => +(+v).toFixed(4);
+function shapeOf() {
+  const o = { family: S.family, chir: S.chir, units: S.units, dia: r4(S.dia), groups: {} };
+  if (S.family === 'prism' || S.family === 'tower') o.n = S.n;
+  if (S.family === 'tower') o.k = S.k;
+  if (S.family === 'sphere') { o.f = S.f; o.pat = S.pat; }
+  for (const [id, g] of Object.entries(S.struct.groups)) o.groups[id] = g.kind === 'c' ? r4(g.len) : g.mode === 'fixed' ? { len: r4(g.len), mode: 'fixed' } : r4(g.ratio);
+  const ov = {}; for (const [i, v] of Object.entries(S.over)) { const x = {}; for (const k of ['len', 'ratio']) if (v[k] !== undefined) x[k] = r4(v[k]); if (v.mode) x.mode = v.mode; ov[i] = x; }
+  if (Object.keys(ov).length) o.over = ov;
+  return o;
+}
+async function shapeCode() { return 'tw1.' + b64u(await squeeze(new TextEncoder().encode(JSON.stringify(shapeOf())), new CompressionStream('deflate-raw'))); }
+async function readShape(code) { // a bare code, or a link that carries one
+  const m = String(code).trim().match(/(?:^|#p=)tw1\.([A-Za-z0-9_-]+)$/);
+  if (!m) throw new Error('not a shape code');
+  const o = JSON.parse(new TextDecoder().decode(await squeeze(unb64u(m[1]), new DecompressionStream('deflate-raw'))));
+  const fams = [...$('family').options].map(x => x.value);
+  if (!o || typeof o !== 'object' || !fams.includes(o.family) || !o.groups || typeof o.groups !== 'object') throw new Error('not a shape code');
+  return o;
+}
+function applyShape(o) {
+  if (o.n) S.n = Math.max(3, Math.min(12, o.n | 0));
+  if (o.k) S.k = Math.max(2, Math.min(10, o.k | 0));
+  if (o.f !== undefined) S.f = Math.max(0, Math.min(TG.SPHERE_SIZES.length - 1, o.f | 0));
+  if (o.pat) S.pat = o.pat === 'gold' ? 'gold' : 'geo';
+  S.chir = o.chir < 0 ? -1 : 1; $('chirR').setAttribute('aria-pressed', S.chir > 0); $('chirL').setAttribute('aria-pressed', S.chir < 0);
+  if (typeof o.units === 'string') { S.units = o.units.slice(0, 8) || 'cm'; $('units').value = S.units; }
+  if (o.dia >= 0) { S.dia = +o.dia; $('dia').value = S.dia; }
+  setFamily(o.family);
+  for (const [id, v] of Object.entries(o.groups)) { // the code's lengths, kept as this family's edited lengths
+    const g = S.struct.groups[id]; if (!g) continue;
+    if (g.kind === 'c' && v > 0) g.len = +v;
+    else if (g.kind === 's' && typeof v === 'object' && v.len > 0) { g.len = +v.len; g.mode = 'fixed'; }
+    else if (g.kind === 's' && v > 0) { g.ratio = +v; g.mode = 'grow'; }
+    g.touched = true;
+  }
+  S.over = {};
+  if (o.over) for (const [i, v] of Object.entries(o.over)) if (S.struct.members[+i] && v && typeof v === 'object') S.over[+i] = { ...v };
+  saveGroupMem(); renderGroups(); solveSoon(0);
+}
+async function loadCode(code, name) {
+  try { applyShape(await readShape(code)); toast(name ? `Preset \u00b7 ${name}` : 'Shape loaded'); return true; }
+  catch (e) { toast('That isn\u2019t a shape code'); return false; }
+}
+const pinned = () => presets.filter(q => q.pin).slice(0, MAX_PINS);
+function recallPin(i) { const q = pinned()[i]; if (q) loadCode(q.code, q.name); else toast(`No preset pinned to Shift + ${i + 1}`); }
+// Copying: the clipboard only works during the click itself, and making a code takes a moment, so the current shape's
+// code is kept ready while the panel is open (as in the studio). If the clipboard fails, the code goes in the field, selected.
+let ready = { stamp: '', code: '' };
+const shapeStamp = () => S.struct ? JSON.stringify(shapeOf()) : '';
+async function keepReady() { const stamp = shapeStamp(); if (stamp && stamp !== ready.stamp) ready = { stamp, code: await shapeCode() }; return ready.code; }
+const currentCode = () => ready.stamp === shapeStamp() ? ready.code : keepReady();
+const linkTo = code => `${location.origin}${location.pathname}#p=${code}`;
+function copyText(get, what) {
+  const done = () => toast(`${what} copied`);
+  const byHand = async () => { const f = $('preCode'); f.value = await get; f.focus(); f.select(); toast(`Press \u2318C to copy the ${what.toLowerCase()}`); };
+  const cb = navigator.clipboard;
+  if (typeof get === 'string') { if (cb && cb.writeText) cb.writeText(get).then(done, byHand); else byHand(); return; }
+  if (cb && cb.write && window.ClipboardItem) cb.write([new ClipboardItem({ 'text/plain': get.then(t => new Blob([t], { type: 'text/plain' })) })]).then(done, byHand);
+  else byHand();
+}
+function thumbSVG() { // a tiny flat drawing of the shape as it is shown, struts only, for the list
+  if (!S.result) return '';
+  const P = S.result.P, c = centroid(P), cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
+  const u = [cy, -sy, 0], w = [sp * sy, sp * cy, cp], Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w)]; });
+  let R = 0; Q.forEach(q => R = Math.max(R, Math.hypot(...q)));
+  const k = 10 / (R || 1), f = x => Math.round(x * 10) / 10;
+  const d = S.model.members.filter(m => m.kind === 's').map(m => `M${f(12 + Q[m.a][0] * k)} ${f(12 - Q[m.a][1] * k)}L${f(12 + Q[m.b][0] * k)} ${f(12 - Q[m.b][1] * k)}`).join('');
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="${d}"/></svg>`;
+}
+function renderPresets() {
+  const host = $('prePins'), pins = pinned();
+  host.replaceChildren();
+  for (let i = 0; i < MAX_PINS; i++) {
+    const q = pins[i], b = document.createElement('button');
+    b.type = 'button'; b.className = 'pre-pin' + (q ? '' : ' empty'); b.disabled = !q;
+    b.innerHTML = `<kbd>\u21e7 ${i + 1}</kbd><span></span>`;
+    b.querySelector('span').textContent = q ? q.name : 'empty';
+    if (q) b.addEventListener('click', () => loadCode(q.code, q.name));
+    host.append(b);
+  }
+  const list = $('preList'); list.replaceChildren();
+  presets.forEach((q, i) => {
+    const row = document.createElement('div'); row.className = 'pre-row';
+    row.innerHTML = '<span class="pre-thumb"></span><button type="button" class="pre-name"></button>' +
+      '<button type="button" class="pre-act pin"></button><button type="button" class="pre-act copy">Copy</button><button type="button" class="pre-act del">\u00d7</button>';
+    const [th, nm, pin, cp, del] = row.children;
+    if (q.thumb && q.thumb.startsWith('<svg')) th.innerHTML = q.thumb;
+    nm.textContent = q.name; if (q.what) { const sm = document.createElement('small'); sm.textContent = q.what; nm.append(sm); }
+    nm.title = 'Load ' + q.name; nm.addEventListener('click', () => loadCode(q.code, q.name));
+    pin.textContent = q.pin ? '\u2605' : '\u2606'; pin.classList.toggle('on', !!q.pin); pin.setAttribute('aria-label', (q.pin ? 'Unpin ' : 'Pin ') + q.name);
+    pin.addEventListener('click', () => { if (!q.pin && pinned().length >= MAX_PINS) { toast('Four pins at most: unpin one first'); return; } q.pin = !q.pin; savePresets(); renderPresets(); });
+    cp.setAttribute('aria-label', 'Copy the code for ' + q.name); cp.addEventListener('click', () => copyText(q.code, 'Code'));
+    del.setAttribute('aria-label', 'Delete ' + q.name);
+    del.addEventListener('click', () => { if (!window.confirm(`Delete the preset \u201c${q.name}\u201d?`)) return; presets.splice(i, 1); savePresets(); renderPresets(); });
+    list.append(row);
+  });
+  $('preEmpty').hidden = presets.length > 0;
+}
+function placePresets() { // under the masthead key, right-aligned to it when it fits, always on screen
+  const r = $('presetsBtn').getBoundingClientRect(), box = $('presetsPop').style, w = Math.min(340, innerWidth - 24);
+  let left = r.right - w; if (left < 12) left = Math.min(r.left, innerWidth - 12 - w);
+  box.top = Math.round(r.bottom + 8) + 'px'; box.left = Math.round(Math.max(12, left)) + 'px'; box.width = w + 'px';
+}
+function showPresets(on) {
+  $('presetsPop').hidden = !on; $('presetsBtn').setAttribute('aria-expanded', String(on)); $('presetsBtn').setAttribute('aria-pressed', String(on));
+  if (on) { renderPresets(); placePresets(); keepReady(); }
+}
+$('presetsBtn').addEventListener('click', () => showPresets($('presetsPop').hidden));
+$('preClose').addEventListener('click', () => showPresets(false));
+addEventListener('pointerdown', e => { if (!$('presetsPop').hidden && !$('presetsPop').contains(e.target) && e.target !== $('presetsBtn')) showPresets(false); });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('presetsPop').hidden) { showPresets(false); return; }
+  const t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
+  if (e.shiftKey && !typing && !e.metaKey && !e.ctrlKey && /^Digit[1-4]$/.test(e.code)) { e.preventDefault(); recallPin(+e.code.slice(5) - 1); }
+});
+addEventListener('resize', () => { if (!$('presetsPop').hidden) placePresets(); });
+$('preSave').addEventListener('click', async () => {
+  if (!S.struct) return;
+  const name = $('preName').value.trim() || (S.shown ? S.shown.name : `Preset ${presets.length + 1}`);
+  presets.unshift({ name, code: await shapeCode(), pin: false, thumb: thumbSVG(), what: S.shown && name !== S.shown.name ? S.shown.name : '' });
+  savePresets(); $('preName').value = ''; renderPresets(); toast(`Saved \u00b7 ${name}`);
+});
+$('preLoad').addEventListener('click', async () => { if (await loadCode($('preCode').value)) $('preCode').value = ''; });
+$('preCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('preLoad').click(); });
+$('preCopyCode').addEventListener('click', () => copyText(currentCode(), 'Code'));
+$('preCopyLink').addEventListener('click', () => { const c = currentCode(); copyText(typeof c === 'string' ? linkTo(c) : c.then(linkTo), 'Link'); });
+
 // start on the Pars dissimilar example so the first view shows the method
 const f0 = store.get('tw.family');
 S.n = Math.max(3, Math.min(12, parseInt(store.get('tw.n')) || 3)); { const z = parseInt(store.get('tw.size')); S.f = z >= 0 && z < TG.SPHERE_SIZES.length ? z : 2; } S.pat = store.get('tw.pat') === 'gold' ? 'gold' : 'geo'; S.k = Math.max(2, Math.min(10, parseInt(store.get('tw.k')) || 4));
 if (!f0 || f0 === 'sphere') setFamily('sphere'); else if (f0 !== 'prism') setFamily(f0); else $('pDiss').onclick();
+if (/#p=tw1\./.test(location.hash)) loadCode(location.hash).then(ok => { if (ok) history.replaceState(null, '', location.pathname + location.search); });
 })();
 </script>
 </body></html>
