@@ -68,13 +68,15 @@ export default function TensegritySphere(props) {
         const io = new IntersectionObserver((e) => { st.visible = e[0].isIntersecting; if (st.visible) kick() })
         io.observe(el)
 
+        const roll = ((DATA.view.roll || 0) * Math.PI) / 180, rc = Math.cos(roll), rs = Math.sin(roll)
         const project = (yaw, pitch, s, W, H) => {
             const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), dist = 4.2
             for (let i = 0; i < nP; i++) {
                 const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2]
                 const X = cy * x - sy * y, Y = sy * x + cy * y
                 const Y2 = cp * Y - sp * z, Z2 = sp * Y + cp * z, k = dist / (dist + Y2)
-                proj[3 * i] = W / 2 + X * s * k; proj[3 * i + 1] = H / 2 - Z2 * s * k; proj[3 * i + 2] = Y2
+                const sx = X * s * k, sz = Z2 * s * k // roll: the picture turned about the line of sight
+                proj[3 * i] = W / 2 + sx * rc - sz * rs; proj[3 * i + 1] = H / 2 - (sx * rs + sz * rc); proj[3 * i + 2] = Y2
             }
         }
 
@@ -168,7 +170,7 @@ export default function TensegritySphere(props) {
                     st.yaw += st.vy * dt; st.pitch += st.vp * dt
                     const f = Math.exp(-dt * 2.2); st.vy *= f; st.vp *= f
                 }
-                if (p.spin && !p.scrollRotate) st.yaw += (TAU / Math.max(1, p.turnSeconds)) * dt
+                if (p.spin && !p.scrollRotate) st.yaw += (DATA.view.dir || 1) * (TAU / Math.max(1, p.turnSeconds)) * dt
                 st.pitch += (DATA.view.pitch - st.pitch) * (1 - Math.exp(-dt * 0.6)) // drift back to the set angle
             }
             // lean toward the cursor, wherever it is on the page

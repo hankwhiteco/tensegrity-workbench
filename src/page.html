@@ -196,6 +196,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 /* push-button rows with indicator lamps: radio inputs + labels, or buttons with aria-pressed */
 .seg { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .seg.three { grid-template-columns: repeat(3, 1fr); }
+#axisSeg { grid-template-columns: repeat(var(--n, 4), 1fr); }
 .seg label, .seg button { position: relative; display: grid; justify-items: center; gap: 2px; padding: 15px 4px 8px; cursor: pointer;
              text-align: center; font: 500 12px/1.2 var(--font); border: 0; border-radius: 3px; background: var(--well); color: var(--fg);
              box-shadow: inset 0 -1px 0 var(--line); }
@@ -303,11 +304,21 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .pre-share { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
 .linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: 500 12px var(--font); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkbtn:hover { color: var(--accent); }
+.colours3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.colours label:has(input:disabled) { opacity: .45; }
 .colours input[type="color"] { width: 100%; height: 34px; padding: 3px; border: 0; border-radius: 3px; background: var(--well); cursor: pointer;
                                 box-shadow: inset 0 -1px 0 var(--line); }
 .colours input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 .colours input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 2px; }
 .colours input[type="color"]::-moz-color-swatch { border: 0; border-radius: 2px; }
+/* image inside */
+.inner-row { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.inner-thumb { width: 64px; height: 64px; border-radius: 50%; background: var(--well) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--line);
+               display: grid; place-items: center; text-align: center; font-size: 10px; line-height: 1.2; color: var(--muted); }
+.inner-thumb.has { color: transparent; }
+.inner-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+#innerOpts { display: grid; gap: 12px; }
+.board.drop-on { box-shadow: inset 0 0 0 2px var(--accent); }
 /* icon export: a flat single-stroke drawing with a live preview */
 .icon-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: start; }
 .icon-prev { width: 96px; height: 96px; border-radius: 3px; background: var(--well); color: var(--accent); display: grid; place-items: center; box-shadow: inset 0 -1px 0 var(--line); }
@@ -341,7 +352,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
   <main class="stage">
     <div class="masthead">
       <div class="brand"><span class="grille" aria-hidden="true"></span><h1>Tensegrity Workbench</h1></div>
-      <span class="hint">Drag to turn · scroll to zoom · click a member to set it</span>
+      <span class="hint">Drag to turn · scroll to zoom, keep going to go inside · click a member to set it</span>
       <div class="mast-r">
         <button class="btn sm" id="bReset">Reset view</button>
         <button class="btn sm" id="presetsBtn" aria-haspopup="dialog" aria-expanded="false" title="Save shapes, and share them as a code or link">Presets</button>
@@ -461,11 +472,29 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 
     <div class="tabpane" data-tab="view" hidden>
     <section>
-      <h2>Display</h2>
+      <h2>Motion</h2>
       <div class="layers">
         <label class="layer"><input type="checkbox" id="bSpin" checked>
           <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
           <span class="meta"><span class="name">Rotate</span><span class="count" id="spinNote">one turn about the vertical</span></span><span class="sw"></span></label>
+      </div>
+      <div class="row"><span class="lbl">Spin axis</span><span class="val" id="axisNote"></span></div>
+      <div class="seg" id="axisSeg" role="group" aria-label="Spin axis"></div>
+      <div class="seg" role="group" aria-label="Spin direction">
+        <button id="dirFwd" aria-pressed="true">Forward</button><button id="dirRev" aria-pressed="false">Reverse</button>
+      </div>
+      <div class="row" id="turnRow">
+        <label for="turnSecs">Turn time</label><span class="val" id="turnVal"></span>
+        <input type="range" id="turnSecs" min="4" max="40" step="1" value="35">
+      </div>
+      <div class="row"><label for="tiltDeg">Tilt</label><span class="val" id="tiltVal"></span><input type="range" id="tiltDeg" min="-85" max="85" step="1"></div>
+      <div class="row"><label for="rollDeg">Roll</label><span class="val" id="rollVal"></span><input type="range" id="rollDeg" min="-180" max="180" step="1" value="0"></div>
+      <div class="row"><label for="wobble">Wobble</label><span class="val" id="wobbleVal"></span><input type="range" id="wobble" min="0" max="30" step="1" value="0"></div>
+    </section>
+
+    <section>
+      <h2>Display</h2>
+      <div class="layers">
         <label class="layer" data-accent><input type="checkbox" id="bForce">
           <svg viewBox="0 0 34 22"><path d="M4 18 L30 4" stroke-width="3"/><path d="M4 4 L30 18" stroke-width="1"/></svg>
           <span class="meta"><span class="name">Forces</span><span class="count">width shows each member's load</span></span><span class="sw"></span></label>
@@ -476,20 +505,18 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           <svg viewBox="0 0 34 22"><circle cx="10" cy="11" r="5" stroke-width="1.2"/><circle cx="23" cy="11" r="8.5" stroke-width="1.2"/></svg>
           <span class="meta"><span class="name">Fixed scale</span><span class="count">sphere grows with repeats</span></span><span class="sw"></span></label>
       </div>
-      <div class="row" id="turnRow">
-        <label for="turnSecs">Turn time</label><span class="val" id="turnVal"></span>
-        <input type="range" id="turnSecs" min="4" max="40" step="1" value="35">
-      </div>
       <div class="row"><span class="lbl">Artboard</span></div>
       <div class="seg three" role="radiogroup" aria-label="Artboard background">
         <input type="radio" name="bg" id="bg_ink" value="ink" checked><label for="bg_ink">Ink</label>
         <input type="radio" name="bg" id="bg_paper" value="paper"><label for="bg_paper">Paper</label>
         <input type="radio" name="bg" id="bg_clear" value="clear"><label for="bg_clear">Clear</label>
       </div>
+      <div class="row"><label for="strutW">Strut weight</label><span class="val" id="strutWVal"></span><input type="range" id="strutW" min="25" max="300" step="5" value="100"></div>
       <div class="row"><span class="lbl">Colours</span><button type="button" class="linkbtn" id="colReset" title="Back to the artboard's own colours">Reset</button></div>
-      <div class="grid2 colours">
+      <div class="colours colours3">
         <label class="f">Struts<input type="color" id="colStrut" aria-label="Strut colour"></label>
         <label class="f">Cables<input type="color" id="colCable" aria-label="Cable colour"></label>
+        <label class="f" id="colBgWrap">Artboard<input type="color" id="colBg" aria-label="Artboard colour"></label>
       </div>
       <div class="row">
         <label for="shade">Depth shading</label><span class="val" id="shVal">100%</span>
@@ -499,11 +526,34 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <label for="cable">Cable brightness</label><span class="val" id="cbVal">100%</span>
         <input type="range" id="cable" min="20" max="200" value="100">
       </div>
+      <div class="row">
+        <label for="strutB">Strut brightness</label><span class="val" id="sbVal">100%</span>
+        <input type="range" id="strutB" min="20" max="200" value="100">
+      </div>
       <div class="row" title="How much the pattern flexes along its own soft directions">
         <label for="give2">Give</label><span class="val" id="gvVal2">1×</span>
         <input type="range" id="give2" min="0" max="300" value="100">
       </div>
       <p class="note">0% shading draws every line the same, near or far. Above 100%, cables blend toward the strut colour.</p>
+    </section>
+
+    <section>
+      <h2>Image inside</h2>
+      <div class="inner-row">
+        <div class="inner-thumb" id="innerThumb" title="Drop an image here or on the artboard">drop<br>image</div>
+        <div class="inner-btns">
+          <button class="btn sm" id="innerPick">Choose image…</button>
+          <button class="btn sm" id="innerRemove" hidden>Remove</button>
+          <input type="file" id="innerFile" accept="image/*" hidden>
+        </div>
+      </div>
+      <div id="innerOpts" hidden>
+        <div class="seg" role="group" aria-label="Image shape"><button id="innerCircle" aria-pressed="true">Circle</button><button id="innerSquare" aria-pressed="false">Square</button></div>
+        <div class="seg" role="group" aria-label="Image facing"><button id="innerFace" aria-pressed="true">Faces you<small>always flat to the view</small></button><button id="innerTurn" aria-pressed="false">Turns with it<small>a panel inside</small></button></div>
+        <div class="row"><label for="innerSize">Size</label><span class="val" id="innerSizeVal"></span><input type="range" id="innerSize" min="10" max="150" step="1" value="70"></div>
+        <div class="row"><label for="innerOp">Opacity</label><span class="val" id="innerOpVal"></span><input type="range" id="innerOp" min="10" max="100" step="1" value="100"></div>
+      </div>
+      <p class="note">Sits at the centre: struts behind it are hidden, struts in front cross over it. Included in every export.</p>
     </section>
 
     <section id="veSection">
@@ -540,15 +590,24 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <button class="btn" id="exPng">PNG still</button>
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
+      <div class="exports">
+        <button class="btn" id="exSvg" title="The view as vector lines: same shading, colours and weights">SVG still</button>
+      </div>
       <label class="check"><input type="checkbox" id="exportBg" checked><span>Include artboard background</span><small>off = transparent PNG and GIF</small></label>
     </section>
 
     <section>
       <h2>Motion clip</h2>
       <div class="row"><span class="lbl">Clip</span><span class="val" id="clipInfo"></span></div>
-      <div class="seg" role="radiogroup" aria-label="Clip">
-        <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Seamless turn<small>one full turn, loops</small></label>
+      <div class="seg three" role="radiogroup" aria-label="Clip">
+        <input type="radio" name="clip" id="clip_turn" value="turn" checked><label for="clip_turn">Turn<small>one full turn, loops</small></label>
+        <input type="radio" name="clip" id="clip_fly" value="fly"><label for="clip_fly">Fly through<small>in, hold, out, loops</small></label>
         <input type="radio" name="clip" id="clip_build" value="build"><label for="clip_build">Build<small>start to finish</small></label>
+      </div>
+      <div id="flyRows" hidden>
+        <div class="row"><label for="flyZoom">Fly in to</label><span class="val" id="flyZoomVal"></span><input type="range" id="flyZoom" min="2" max="40" step="1" value="20"></div>
+        <div class="row"><label for="flySecs">Fly time</label><span class="val" id="flySecsVal"></span><input type="range" id="flySecs" min="6" max="60" step="1" value="16"></div>
+        <div class="transport"><button class="btn grow" id="flyPreview">Preview in the view</button></div>
       </div>
       <div class="row">
         <label for="gifRate">GIF frame rate</label>
@@ -765,7 +824,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, strutB: 1, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -822,7 +881,7 @@ function solve() {
     saveGroupMem();
     if (S.sel >= md.members.length) S.sel = -1;
     if (ANIM.on) stopBuild();
-    fitView(); renderReport(); renderSel(); syncClip(); iconSync();
+    fitView(); renderReport(); renderSel(); syncClip(); iconSync(); ORI = null; syncMotion();
     if (!ANIM.autoDone && S.shown.repeats && !reduce.matches) { ANIM.autoDone = true; startBuild(); }
   });
 }
@@ -1002,8 +1061,12 @@ document.querySelectorAll('input[name="bg"]').forEach(r => r.addEventListener('c
 // Strut and cable colours: a pick is set on the board as its own --vp-strut / --vp-cable, so it holds on every
 // artboard and everything that reads the board's colours (view, legend, exports, icon peek, Framer) follows.
 // Reset goes back to each artboard's own colours (#E3DEC9 on Ink and Clear). Remembered as tw.colours.
-const COL = { strut: '--vp-strut', cable: '--vp-cable' };
-function syncColours() { $('colStrut').value = toHex(colors.strut); $('colCable').value = toHex(colors.cable); }
+const COL = { strut: '--vp-strut', cable: '--vp-cable', bg: '--vp-bg' };
+function syncColours() {
+  $('colStrut').value = toHex(colors.strut); $('colCable').value = toHex(colors.cable);
+  const clear = S.bg === 'clear'; $('colBg').disabled = clear; // Clear is transparent: no colour to pick
+  $('colBg').value = clear ? '#1d1d1d' : toHex(colors.bg); $('colBgWrap').title = clear ? 'Clear has no artboard colour: pick Ink or Paper' : '';
+}
 function toHex(c) { if (/^#[0-9a-f]{6}$/i.test(c)) return c; const m = String(c).match(/\d+/g); return m && m.length >= 3 ? '#' + m.slice(0, 3).map(x => (+x).toString(16).padStart(2, '0')).join('') : '#e3dec9'; }
 function setColour(k, v) {
   if (v) $('board').style.setProperty(COL[k], v); else $('board').style.removeProperty(COL[k]);
@@ -1013,7 +1076,8 @@ function setColour(k, v) {
 }
 $('colStrut').addEventListener('input', e => setColour('strut', e.target.value));
 $('colCable').addEventListener('input', e => setColour('cable', e.target.value));
-$('colReset').addEventListener('click', () => { setColour('strut', null); setColour('cable', null); });
+$('colBg').addEventListener('input', e => { if (S.bg !== 'clear') setColour('bg', e.target.value); });
+$('colReset').addEventListener('click', () => { setColour('strut', null); setColour('cable', null); setColour('bg', null); });
 setBg('ink'); // always land on light rods on the dark artboard; Paper and Clear are per visit
 try { const c = JSON.parse(store.get('tw.colours') || '{}'); for (const k of Object.keys(COL)) if (/^#[0-9a-f]{6}$/i.test(c[k] || '')) $('board').style.setProperty(COL[k], c[k]); } catch (e) {}
 readColors(); syncColours();
@@ -1037,25 +1101,59 @@ new ResizeObserver(resize).observe(cv); resize();
 function animZoom() { const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom; return zp ? 1 + (zp.amount - 1) * (1 - ease((ANIM.t - zp.out) / zp.dur)) : 1; }
 // the canvas being drawn: the viewport, or an export frame; STILL: draw without the build's camera
 let PW = 1, PH = 1, STILL = false;
+// Spin axis: the chosen symmetry axis is turned upright (rows B, C, A take the axis A to +z), so the turn goes
+// round it, as in the Dymaxion studio. Wobble swings the tilt (S.wobble degrees, sin of WOB_T / 2); roll turns
+// the picture about the line of sight.
+let ORI = null, oriFor = '', WOB_T = 0;
+function orientation() {
+  const key = S.axis + '|' + (S.result ? S.shown && S.shown.name : '') + '|' + (iconAxes.result === S.result);
+  if (ORI && oriFor === key) return ORI;
+  oriFor = key; ORI = null;
+  const ax = S.axis !== 'v' && S.result ? symmetryAxes().find(x => 'ax' + x.n === S.axis) : null;
+  if (ax) {
+    const A = ax.a, ref = Math.abs(A[2]) > 0.9 ? [1, 0, 0] : [0, 0, 1];
+    const B = norm3([A[1] * ref[2] - A[2] * ref[1], A[2] * ref[0] - A[0] * ref[2], A[0] * ref[1] - A[1] * ref[0]]);
+    const C = [A[1] * B[2] - A[2] * B[1], A[2] * B[0] - A[0] * B[2], A[0] * B[1] - A[1] * B[0]];
+    ORI = [B, C, A];
+  }
+  return ORI;
+}
+const orient = d => { const R = orientation(); return R ? [dot3(R[0], d), dot3(R[1], d), dot3(R[2], d)] : d; };
+const unorient = q => { const R = orientation(); return R ? [0, 1, 2].map(k => q[0] * R[0][k] + q[1] * R[1][k] + q[2] * R[2][k]) : q; };
+const wobbleNow = () => S.wobble ? S.wobble * Math.PI / 180 * Math.sin(WOB_T * 0.5) : 0;
+// the camera's screen right (u), up (w) and toward-the-viewer (v) directions in the structure's own frame
+function viewBasis(withWobble) {
+  const yaw = S.view.yaw, pitch = S.view.pitch + (withWobble ? wobbleNow() : 0), cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  let u = [cy, -sy, 0], w = [sp * sy, sp * cy, cp]; const v = [-cp * sy, -cp * cy, sp];
+  const ro = S.roll * Math.PI / 180, cr = Math.cos(ro), sr = Math.sin(ro);
+  [u, w] = [u.map((x, k) => x * cr - w[k] * sr), u.map((x, k) => x * sr + w[k] * cr)];
+  return { u: unorient(u), w: unorient(w), v: unorient(v) };
+}
 function project(p) {
-  const { yaw, pitch, zoom } = S.view;
-  let x = p[0] - fit.c[0], y = p[1] - fit.c[1], z = p[2] - fit.c[2];
+  const { yaw, zoom } = S.view, pitch = S.view.pitch + wobbleNow();
+  let [x, y, z] = orient([p[0] - fit.c[0], p[1] - fit.c[1], p[2] - fit.c[2]]);
   // z-up world: yaw about z, then pitch about x
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   let X = cy * x - sy * y, Y = sy * x + cy * y, Z = z;
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const Y2 = cp * Y - sp * Z, Z2 = sp * Y + cp * Z;
   const zb = animZoom();
-  const W = PW, H = PH, s = Math.min(W, H) * 0.40 / fit.r * zoom * zb;
-  const dist = fit.r * 4.2, persp = dist / (dist + Y2);
+  // Zoom moves the camera in (a dolly), from 4.2 r away at 1x to 0.105 r at 40x, so it can pass inside the
+  // structure. The scale at the centre is the same as a plain zoom, so normal views look as they did.
+  // The 4th value is the distance in front of the camera: <= NEAR() means behind it (callers clip).
+  const W = PW, H = PH, s = Math.min(W, H) * 0.40 / fit.r;
+  const D0 = fit.r * 4.2, D = D0 / (zoom * zb), cz = D + Y2, persp = D0 / Math.max(cz, 1e-9);
   let ox = 0, oy = 0;
   const zp = !STILL && !S.fixedScale && ANIM.on && ANIM.plan && ANIM.plan.zoom;
   if (zp && zp.focus && zp.amount > 1 && !project.inner) { // aim at the first pattern while close in
     project.inner = true; const f = project(zp.focus); project.inner = false;
     const w = (zb - 1) / (zp.amount - 1); ox = w * (f[0] - W / 2); oy = w * (f[1] - H / 2);
   }
-  return [W / 2 + X * s * persp - ox, H / 2 - Z2 * s * persp - oy, Y2];
+  const ro = S.roll * Math.PI / 180, cr = Math.cos(ro), sr = Math.sin(ro), sx = X * s * persp, sz = Z2 * s * persp;
+  return [W / 2 + sx * cr - sz * sr - ox, H / 2 - (sx * sr + sz * cr) - oy, Y2, cz];
 }
+const NEAR = () => fit.r * 0.02;  // the camera's near limit
+const camD = () => fit.r * 4.2 / (S.view.zoom * animZoom()); // camera distance from the centre
 let hover = -1;
 const isCable = g => g.m.kind !== 's';
 function mixColor(a, b, t) {
@@ -1080,7 +1178,16 @@ function draw(c = cv, cx = ctx, o = {}) {
   if (!o.base && !fr && idleGives()) base = idlePose(GIVE_T + IDLE_OFF);
   const sel = o.clean ? -2 : S.sel, hov = o.clean ? -2 : hover;
   const P = base.map(project), md = S.model, v = S.verify;
-  let segs = md.members.map((m, k) => ({ k, m, a: P[m.a], b: P[m.b], z: (P[m.a][2] + P[m.b][2]) / 2 }));
+  const near = NEAR();
+  // a member crossing the camera's near limit is cut there; one wholly behind the camera is left out
+  const clip = (A, B, pa, pb) => { const t = (near - A[3]) / (B[3] - A[3]); return project([0, 1, 2].map(k => pa[k] + (pb[k] - pa[k]) * t)); };
+  let segs = [];
+  md.members.forEach((m, k) => {
+    let a = P[m.a], b = P[m.b];
+    if (a[3] <= near && b[3] <= near) return;
+    if (a[3] <= near) a = clip(a, b, base[m.a], base[m.b]); else if (b[3] <= near) b = clip(b, a, base[m.b], base[m.a]);
+    segs.push({ k, m, a, b, z: (a[2] + b[2]) / 2, cz: (a[3] + b[3]) / 2 });
+  });
   if (fr) {
     // faint ghost of the finished structure, so each piece has a visible place to go
     const Pg = S.result.P.map(project);
@@ -1090,30 +1197,39 @@ function draw(c = cv, cx = ctx, o = {}) {
     segs = segs.filter(g => fr.alpha[g.k] > 0.001);
   }
   segs.sort((x, y) => y.z - x.z);
-  const zs = P.map(p => p[2]), zmin = Math.min(...zs), zmax = Math.max(...zs);
+  const zs = P.filter(p => p[3] > near).map(p => p[2]), zmin = zs.length ? Math.min(...zs) : 0, zmax = zs.length ? Math.max(...zs) : 1;
+  // up close (zoom past 1x), lines thicken with nearness like real rods; at 1x and below nothing changes
+  const zk = Math.max(0, Math.min(1, S.view.zoom * animZoom() - 1)), Dc = camD();
   const mf = maxForce();
   ctx.lineCap = 'round';
-  for (const s of segs) {
+  const drawSeg = (s, am) => {
     const depth = zmax > zmin ? (s.z - zmin) / (zmax - zmin) : 0.5; // 0 near, 1 far
-    const alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * (isCable(s) ? Math.min(1, S.cable) : 1);
+    let alpha = Math.max(0.08, 1 - 0.6 * S.shade * depth) * Math.min(1, isCable(s) ? S.cable : S.strutB);
+    if (!isCable(s) && S.strutB > 1) alpha += (1 - alpha) * Math.min(1, S.strutB - 1); // above 100%: far struts lift toward full strength
     const isS = s.m.kind === 's';
     const f = Math.abs(v.q[s.k] * S.result.lengths[s.k]) / mf;
     // rods drawn about 1/40 of their length thick, like the reference sculpture
-    const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d));
-    let col = isS ? colors.strut : colors.cable, w = isS ? rod : 1.1;
+    const rod = Math.max(1.6, Math.min(7, fit.strut * Math.min(W, H) * 0.40 / fit.r * S.view.zoom * animZoom() / 40 / d)) * S.strutW;
+    // zoomed in, rods take their true thickness (1/40 of their length) in perspective, so near ones fill out and
+    // far ones stay readable; cables thicken a little up close. Blended in from 1x to 2x.
+    const pp = fit.r * 4.2 / Math.max(s.cz, near), rodTrue = Math.max(1.2, Math.min(80, fit.strut * Math.min(W, H) * 0.40 / fit.r * pp / 40 / d)) * S.strutW;
+    let col = isS ? colors.strut : colors.cable, w = isS ? rod + (rodTrue - rod) * zk : 1.1 * (zk ? Math.max(0.6, Math.min(3, Math.pow(Dc / Math.max(s.cz, near), zk) * 1.5)) : 1);
     if (S.force) { col = isS ? colors.com : colors.ten; w = isS ? 2 + 6 * f : 0.6 + 2.8 * f; }
     if (s.k === sel || s.k === hov) { col = colors.sel; }
     if (!isS && v.q[s.k] <= 1e-9) { ctx.setLineDash([4 * d, 4 * d]); } else ctx.setLineDash([]);
     const fa = fr ? fr.alpha[s.k] : 1;
-    ctx.globalAlpha = (s.k === sel ? 1 : alpha) * fa;
+    ctx.globalAlpha = (s.k === sel ? 1 : alpha) * fa * am;
     if (!isS && S.cable > 1 && !S.force && col === colors.cable) col = mixColor(colors.cable, colors.strut, Math.min(1, S.cable - 1));
+    // struts above 100%: toward white on dark artboards, toward black on Paper (the most contrast either way)
+    if (isS && S.strutB > 1 && !S.force && col === colors.strut) col = mixColor(colors.strut, S.bg === 'paper' ? '#000000' : '#ffffff', 0.85 * Math.min(1, S.strutB - 1));
     ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : (fr ? fr.cw[s.k] : 1));
     ctx.beginPath();
     const cv3 = fr && fr.curve[s.k], sk3 = fr && fr.stroke[s.k];
     if (sk3) { // strut drawing itself out from a joint
       const a3 = fr.P[sk3.from], b3 = fr.P[sk3.to], tip = project([0, 1, 2].map(d => a3[d] + (b3[d] - a3[d]) * sk3.r)), a2 = project(a3);
+      if (tip[3] <= near || a2[3] <= near) return;
       ctx.moveTo(a2[0], a2[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
-      ctx.save(); ctx.globalAlpha = sk3.thin ? 0.5 * fa : 0.9; ctx.fillStyle = colors.strut; ctx.beginPath(); ctx.arc(tip[0], tip[1], (sk3.thin ? 1 : 1.6) * d, 0, 7); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = (sk3.thin ? 0.5 * fa : 0.9) * am; ctx.fillStyle = colors.strut; ctx.beginPath(); ctx.arc(tip[0], tip[1], (sk3.thin ? 1 : 1.6) * d, 0, 7); ctx.fill(); ctx.restore();
       ctx.beginPath();
     } else if (cv3) { // thread still unspooling or slack: draw it as a curve, only as far as it has reached
       const c = project(cv3.ctl), n = 18, upto = Math.max(1, Math.round(n * cv3.reveal));
@@ -1123,8 +1239,31 @@ function draw(c = cv, cx = ctx, o = {}) {
     } else { ctx.moveTo(s.a[0], s.a[1]); ctx.lineTo(s.b[0], s.b[1]); }
     ctx.stroke();
     if (fr && fr.glow[s.k] > 0.01) { // pieces that just arrived glow, then cool to their normal colour
-      ctx.globalAlpha = fa * fr.glow[s.k]; ctx.strokeStyle = colors.sel; ctx.stroke();
+      ctx.globalAlpha = fa * fr.glow[s.k] * am; ctx.strokeStyle = colors.sel; ctx.stroke();
     }
+  };
+  if (!INNER.img) segs.forEach(s => drawSeg(s, 1));
+  else {
+    // Exact occlusion by the image's plane: each member is split where it crosses the plane; the part behind is drawn
+    // before the image (and hidden by it where they overlap), the part in front after it. Nothing pops and nothing
+    // shows through. Faces you: the plane through the centre square to the view. Turns with it: the panel's plane,
+    // in front = the camera's side of it.
+    const vb = viewBasis(true), c0 = fit.c, N = S.inner.mode === 'face' ? vb.v : unorient([0, 1, 0]);
+    const sgn = S.inner.mode === 'face' || dot3(vb.v, N) >= 0 ? 1 : -1;
+    const fd = q => sgn * ((q[0] - c0[0]) * N[0] + (q[1] - c0[1]) * N[1] + (q[2] - c0[2]) * N[2]); // + = in front
+    const under = [], over = [];
+    for (const sg of segs) {
+      const A = base[sg.m.a], B = base[sg.m.b], da = fd(A), db = fd(B);
+      const plain = (fr && (fr.stroke[sg.k] || fr.curve[sg.k])) || sg.a !== P[sg.m.a] || sg.b !== P[sg.m.b]; // drawing in, or cut at the camera
+      if (plain || (da <= 0 && db <= 0) || (da >= 0 && db >= 0)) { (da + db > 0 ? over : under).push(sg); continue; } // wholly on one side (or not split): by its middle
+      const t = da / (da - db), pm = project([0, 1, 2].map(k => A[k] + (B[k] - A[k]) * t));
+      under.push({ ...sg, a: da < 0 ? sg.a : pm, b: da < 0 ? pm : sg.b });
+      over.push({ ...sg, a: da < 0 ? pm : sg.a, b: da < 0 ? sg.b : pm });
+    }
+    under.forEach(sg => drawSeg(sg, 1));
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    drawInner(ctx, d);
+    over.forEach(sg => drawSeg(sg, 1));
   }
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   if (fr && fr.marks.length) { // joint markers
@@ -1148,6 +1287,77 @@ function draw(c = cv, cx = ctx, o = {}) {
     P.forEach((p, i) => ctx.fillText(i, p[0] + 5 * d, p[1] - 5 * d));
   }
 }
+// Image inside: a picture at the structure's centre, drawn between the far and near members (draw() calls it at the
+// centre's depth). Faces you = flat to the view (screen right and up); Turns with it = a panel in the structure's own
+// frame through the spin axis, so it turns, foreshortens and shows its back. Circle or square, the image covering it.
+// The panel's corners are projected and the image is mapped with an affine transform (no perspective within it).
+const INNER = { img: null, url: '' };
+function drawInner(ctx, d) {
+  const im = INNER.img; if (!im || !S.result) return;
+  const c = fit.c, pc = project(c); if (pc[3] <= NEAR()) return;
+  let R = 0; S.result.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
+  const r = R * S.inner.size;
+  const X = S.inner.mode === 'face' ? viewBasis(true).u : unorient([1, 0, 0]), Y = S.inner.mode === 'face' ? viewBasis(true).w : unorient([0, 0, 1]);
+  const px = project(c.map((v, k) => v + X[k] * r)), pd = project(c.map((v, k) => v - Y[k] * r)); // +x, and down
+  if (px[3] <= NEAR() || pd[3] <= NEAR()) return;
+  const m = [px[0] - pc[0], px[1] - pc[1], pd[0] - pc[0], pd[1] - pc[1], pc[0], pc[1]]; // unit square [-1, 1] to the screen
+  const ar = im.naturalWidth / im.naturalHeight, w = ar > 1 ? 2 * ar : 2, h = ar > 1 ? 2 : 2 / ar; // cover the square
+  if (ctx.raw) { // the SVG stand-in: one group, clipped
+    const id = 'inner' + (ctx.uid = (ctx.uid || 0) + 1), f = x => Math.round(x * 1000) / 1000;
+    const clip = S.inner.shape === 'circle' ? '<circle cx="0" cy="0" r="1"/>' : '<rect x="-1" y="-1" width="2" height="2"/>';
+    ctx.raw(`<g transform="matrix(${m.map(f).join(' ')})"${S.inner.op < 1 ? ` opacity="${f(S.inner.op)}"` : ''}><clipPath id="${id}">${clip}</clipPath><image href="${INNER.url}" x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" preserveAspectRatio="none" clip-path="url(#${id})"/></g>`);
+    return;
+  }
+  ctx.save(); ctx.globalAlpha = S.inner.op;
+  ctx.setTransform(...m);
+  ctx.beginPath(); if (S.inner.shape === 'circle') ctx.arc(0, 0, 1, 0, 2 * Math.PI); else ctx.rect(-1, -1, 2, 2);
+  ctx.clip(); ctx.drawImage(im, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+function setInnerImage(url, save) {
+  const im = new Image();
+  im.onload = () => {
+    // keep it light: at most 1024 px on the long side, WebP (keeps transparency) or PNG
+    const k = Math.min(1, 1024 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    let small = c.toDataURL('image/webp', 0.9); if (!small.startsWith('data:image/webp')) small = c.toDataURL('image/png');
+    const fin = new Image(); fin.onload = () => { INNER.img = fin; INNER.url = small; syncInner(); }; fin.src = small;
+    if (save) { try { localStorage.setItem('tw.innerImg', small); } catch (e) { toast('Image is in use, but too big to remember after a reload.'); } }
+  };
+  im.onerror = () => toast('That file isn’t an image this browser can read.');
+  im.src = url;
+}
+function syncInner() {
+  const has = !!INNER.img;
+  $('innerThumb').style.backgroundImage = has ? `url("${INNER.url}")` : ''; $('innerThumb').classList.toggle('has', has);
+  $('innerThumb').style.borderRadius = S.inner.shape === 'circle' ? '50%' : '4px';
+  $('innerRemove').hidden = $('innerOpts').hidden = !has;
+  $('innerCircle').setAttribute('aria-pressed', String(S.inner.shape === 'circle')); $('innerSquare').setAttribute('aria-pressed', String(S.inner.shape !== 'circle'));
+  $('innerFace').setAttribute('aria-pressed', String(S.inner.mode === 'face')); $('innerTurn').setAttribute('aria-pressed', String(S.inner.mode !== 'face'));
+  $('innerSize').value = Math.round(S.inner.size * 100); $('innerSizeVal').textContent = Math.round(S.inner.size * 100) + '% of the radius';
+  $('innerOp').value = Math.round(S.inner.op * 100); $('innerOpVal').textContent = Math.round(S.inner.op * 100) + '%';
+  store.set('tw.inner', JSON.stringify(S.inner));
+}
+const takeFile = f => { if (!f || !/^image\//.test(f.type)) { toast('Drop an image file (PNG, JPEG, WebP, SVG…)'); return; } const r = new FileReader(); r.onload = () => setInnerImage(r.result, true); r.readAsDataURL(f); };
+$('innerPick').addEventListener('click', () => $('innerFile').click());
+$('innerFile').addEventListener('change', e => { takeFile(e.target.files[0]); e.target.value = ''; });
+$('innerRemove').addEventListener('click', () => { INNER.img = null; INNER.url = ''; try { localStorage.removeItem('tw.innerImg'); } catch (e) {} syncInner(); });
+$('innerCircle').addEventListener('click', () => { S.inner.shape = 'circle'; syncInner(); });
+$('innerSquare').addEventListener('click', () => { S.inner.shape = 'square'; syncInner(); });
+$('innerFace').addEventListener('click', () => { S.inner.mode = 'face'; syncInner(); });
+$('innerTurn').addEventListener('click', () => { S.inner.mode = 'turn'; syncInner(); });
+$('innerSize').addEventListener('input', e => { S.inner.size = +e.target.value / 100; syncInner(); });
+$('innerOp').addEventListener('input', e => { S.inner.op = +e.target.value / 100; syncInner(); });
+// drop an image anywhere on the artboard, or on the thumbnail
+for (const el of [$('board'), $('innerThumb')]) {
+  el.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); $('board').classList.add('drop-on'); } });
+  el.addEventListener('dragleave', () => $('board').classList.remove('drop-on'));
+  el.addEventListener('drop', e => { e.preventDefault(); $('board').classList.remove('drop-on'); takeFile(e.dataTransfer.files[0]); });
+}
+try { const o = JSON.parse(store.get('tw.inner') || '{}'); if (o.size >= 0.1 && o.size <= 1.5) S.inner.size = +o.size; if (o.op >= 0.1 && o.op <= 1) S.inner.op = +o.op;
+  if (o.shape === 'square') S.inner.shape = 'square'; if (o.mode === 'turn') S.inner.mode = 'turn'; } catch (e) {}
+{ const saved = store.get('tw.innerImg'); if (saved && saved.startsWith('data:image/')) setInnerImage(saved, false); else syncInner(); }
+
 // Vector equilibrium overlay (spheres): Fuller's VE is four great circles whose axes run through its
 // opposite triangular faces. Those four face-to-face axes of spin are the cube diagonals (1, 1, 1) and its
 // sign flips, which are four of the sphere's three-fold axes (every sphere size is built symmetric about
@@ -1194,23 +1404,26 @@ function drawVE(ctx, d, t) {
     const b = [N[1] * a[2] - N[2] * a[1], N[2] * a[0] - N[0] * a[2], N[0] * a[1] - N[1] * a[0]];
     const Q = [];
     for (let i = 0; i <= n; i++) { const t2 = i / n * 2 * Math.PI; Q.push(project([0, 1, 2].map(k => c[k] + R * (Math.cos(t2) * a[k] + Math.sin(t2) * b[k])))); }
-    const at = f => { const x = f * n, i = Math.min(n - 1, Math.floor(x)), r = x - i, p = Q[i], q = Q[i + 1]; return [p[0] + (q[0] - p[0]) * r, p[1] + (q[1] - p[1]) * r, p[2] + (q[2] - p[2]) * r]; };
+    const at = f => { const x = f * n, i = Math.min(n - 1, Math.floor(x)), r = x - i, p = Q[i], q = Q[i + 1]; return [p[0] + (q[0] - p[0]) * r, p[1] + (q[1] - p[1]) * r, p[2] + (q[2] - p[2]) * r, p[3] + (q[3] - p[3]) * r]; };
     const span = head - tail;
     if (span > 0.001) {
       // the disk: a faint plane through the centre, as much of it as the rim has drawn
-      ctx.globalAlpha = 0.03 * span; ctx.fillStyle = col; ctx.beginPath();
-      Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+      if (Q.every(q => q[3] > NEAR())) { // no disk once the camera is inside it
+        ctx.globalAlpha = 0.03 * span; ctx.fillStyle = col; ctx.beginPath();
+        Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+      }
       // the rim from tail to head, fading on the far side like the struts
       ctx.strokeStyle = col; ctx.lineWidth = 1.6 * d;
       const steps = Math.max(1, Math.ceil(span * n));
       for (let j = 0; j < steps; j++) {
         const p = at(tail + span * j / steps), q = at(tail + span * (j + 1) / steps);
+        if (p[3] <= NEAR() || q[3] <= NEAR()) continue;
         const depth = Math.max(0, Math.min(1, ((p[2] + q[2]) / 2 + R) / (2 * R)));
         ctx.globalAlpha = Math.max(0.15, 1 - 0.7 * S.shade * depth);
         ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
       }
       if (head < 1 || (tail > 0 && tail < 1)) { // the bright point at the moving end
-        const tip = at(head < 1 ? head : tail);
+        const tip = at(head < 1 ? head : tail); if (tip[3] <= NEAR()) return;
         ctx.globalAlpha = 0.95; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(tip[0], tip[1], 2 * d, 0, 7); ctx.fill();
       }
     }
@@ -1218,10 +1431,11 @@ function drawVE(ctx, d, t) {
     // with a point where it leaves each face
     if (!S.veAxes || axis < 0.001) return;
     const e0 = project([0, 1, 2].map(k => c[k] - 1.12 * R * axis * N[k])), e1 = project([0, 1, 2].map(k => c[k] + 1.12 * R * axis * N[k]));
+    if (e0[3] <= NEAR() || e1[3] <= NEAR()) return;
     ctx.globalAlpha = 0.6; ctx.strokeStyle = col; ctx.lineWidth = 0.9 * d; ctx.setLineDash([4 * d, 4 * d]);
     ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke(); ctx.setLineDash([]);
     const dot = clamp01((axis - 0.85) / 0.15);
-    if (dot > 0) { ctx.fillStyle = col; for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); ctx.globalAlpha = (f[2] < 0 ? 0.9 : 0.4) * dot; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); } }
+    if (dot > 0) { ctx.fillStyle = col; for (const sgn of [-1, 1]) { const f = project([0, 1, 2].map(k => c[k] + sgn * R * N[k])); if (f[3] <= NEAR()) continue; ctx.globalAlpha = (f[2] < 0 ? 0.9 : 0.4) * dot; ctx.beginPath(); ctx.arc(f[0], f[1], 2.2 * d, 0, 7); ctx.fill(); } }
   });
   ctx.restore();
 }
@@ -1233,6 +1447,7 @@ function pick(mx, my) {
   let best = -1, bd = 10 * d, bz = Infinity;
   S.model.members.forEach((m, k) => {
     const a = P[m.a], b = P[m.b], dx = b[0] - a[0], dy = b[1] - a[1];
+    if (a[3] <= NEAR() || b[3] <= NEAR()) return;
     const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
     const px = a[0] + dx * t, py = a[1] + dy * t, dd = Math.hypot(x - px, y - py) - (m.kind === 's' ? 3 * d : 0);
     const z = a[2] + (b[2] - a[2]) * t;
@@ -1241,13 +1456,13 @@ function pick(mx, my) {
   return best;
 }
 let drag = null;
-cv.addEventListener('pointerdown', e => { if (exporting) return; drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { if (exporting) return; stopFly(); drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => {
   const b = cv.getBoundingClientRect();
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy);
     drag.x = e.clientX; drag.y = e.clientY;
-    if (drag.moved > 3) { cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.5, Math.min(1.5, S.view.pitch + dy * 0.008)); }
+    if (drag.moved > 3) { cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.48, Math.min(1.48, S.view.pitch + dy * 0.008)); syncMotion(); }
   } else { hover = ANIM.on ? -1 : pick(e.clientX - b.left, e.clientY - b.top); }
 });
 cv.addEventListener('pointerup', e => {
@@ -1256,7 +1471,7 @@ cv.addEventListener('pointerup', e => {
   drag = null;
 });
 cv.addEventListener('pointerleave', () => { hover = -1; });
-cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; S.view.zoom = Math.max(0.3, Math.min(5, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
+cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; stopFly(); S.view.zoom = Math.max(0.3, Math.min(40, S.view.zoom * Math.exp(-e.deltaY * 0.0012))); }, { passive: false });
 
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
@@ -1266,7 +1481,38 @@ function syncVE() {
   $('veAxWrap').hidden = $('veLoopWrap').hidden = !(S.ve && S.family === 'sphere');
   if (S.turnSecs) { const P = veCycle(), k = Math.round(S.turnSecs / P); $('veLoopNote').textContent = `one cycle every ${+P.toFixed(1)} s, ${k} per turn`; }
 }
-$('bReset').onclick = () => { if (exporting) return; S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; };
+$('bReset').onclick = () => { if (exporting) return; stopFly(); S.view = { yaw: 0.6, pitch: -0.35, zoom: 1 }; S.roll = 0; syncMotion(); };
+// motion controls (View > Motion), remembered as tw.motion
+function saveMotion() { store.set('tw.motion', JSON.stringify({ axis: S.axis, dir: S.dir, roll: S.roll, wobble: S.wobble, strutW: S.strutW })); }
+let axisMenuFor = null;
+function axisMenu() { // Vertical, then this structure's own symmetry axes
+  if (!S.result || axisMenuFor === S.result) return; axisMenuFor = S.result;
+  const axes = symmetryAxes(), opts = [['v', 'Vertical', 'as built'], ...axes.map(x => ['ax' + x.n, x.n + '-fold', 'axis'])];
+  if (!opts.some(o => o[0] === S.axis)) S.axis = 'v';
+  $('axisSeg').style.setProperty('--n', opts.length);
+  $('axisSeg').innerHTML = opts.map(([v, t, sm]) => `<button data-axis="${v}" aria-pressed="${v === S.axis}">${t}<small>${sm}</small></button>`).join('');
+  $('axisSeg').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.axis = b.dataset.axis; ORI = null; syncMotion(); saveMotion(); }));
+}
+function syncMotion() {
+  axisMenu();
+  $('axisSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.axis === S.axis)));
+  $('axisNote').textContent = S.axis === 'v' ? 'turns about the vertical' : `turns about a ${S.axis.slice(2)}-fold axis`;
+  $('dirFwd').setAttribute('aria-pressed', String(S.dir > 0)); $('dirRev').setAttribute('aria-pressed', String(S.dir < 0));
+  const tilt = Math.round(-S.view.pitch * 180 / Math.PI);
+  $('tiltDeg').value = tilt; $('tiltVal').textContent = `${tilt}\u00b0 ${tilt >= 0 ? 'from above' : 'from below'}`;
+  $('rollDeg').value = S.roll; $('rollVal').textContent = S.roll ? `${S.roll}\u00b0` : 'none';
+  $('wobble').value = S.wobble; $('wobbleVal').textContent = S.wobble ? `\u00b1${S.wobble}\u00b0` : 'off';
+  $('strutW').value = Math.round(S.strutW * 100); $('strutWVal').textContent = Math.round(S.strutW * 100) + '%';
+}
+$('dirFwd').addEventListener('click', () => { S.dir = 1; syncMotion(); saveMotion(); });
+$('dirRev').addEventListener('click', () => { S.dir = -1; syncMotion(); saveMotion(); });
+$('tiltDeg').addEventListener('input', e => { S.view.pitch = -(+e.target.value) * Math.PI / 180; syncMotion(); });
+$('rollDeg').addEventListener('input', e => { S.roll = +e.target.value; syncMotion(); saveMotion(); });
+$('wobble').addEventListener('input', e => { S.wobble = +e.target.value; syncMotion(); saveMotion(); });
+$('strutW').addEventListener('input', e => { S.strutW = +e.target.value / 100; syncMotion(); saveMotion(); });
+try { const m = JSON.parse(store.get('tw.motion') || '{}');
+  if (typeof m.axis === 'string') S.axis = m.axis; if (m.dir === -1) S.dir = -1;
+  if (m.roll >= -180 && m.roll <= 180) S.roll = +m.roll; if (m.wobble >= 0 && m.wobble <= 30) S.wobble = +m.wobble; if (m.strutW >= 0.25 && m.strutW <= 3) S.strutW = +m.strutW; } catch (e) {}
 function legend() {
   $('legend').innerHTML = S.force
     ? `<span><i style="background:var(--vp-compress)"></i>compression</span><span><i style="background:var(--vp-tension);height:2px"></i>tension (width = force)</span>`
@@ -1346,6 +1592,12 @@ function makePlan() {
       order0.push({ k, from: score(m.a) > score(m.b) ? m.a : score(m.b) > score(m.a) ? m.b : (axial(m.a) >= axial(m.b) ? m.a : m.b) });
       drawn.add(m.a); drawn.add(m.b);
     });
+    // stroke starts: not a metronome. The first come a little slower and they quicken (1.25x down to 0.75x the
+    // gap), with a golden-ratio stagger of +-25%, scaled so the pattern takes the same time as before
+    const nF = flower.length, rawG = [];
+    for (let i = 1; i < nF; i++) rawG.push((1.25 - 0.5 * (i - 1) / Math.max(1, nF - 2)) * (1 + 0.5 * (((i * 0.618034) % 1) - 0.5)));
+    const gScale = (nF - 1) * gap / (rawG.reduce((a, b) => a + b, 0) || 1), offs = [0];
+    rawG.forEach(g => offs.push(offs[offs.length - 1] + g * gScale));
     const span = (flower.length - 1) * gap + flight, closeAfter = span + 1.2, breathDur = 2.2;
     const axesInOrder = [v0, ...others];
     const starts = [0.8];
@@ -1362,7 +1614,7 @@ function makePlan() {
           k = mine.reduce((best, x) => d2(mid(x), tm) < d2(mid(best), tm) ? x : best, mine[0]);
           const m = md.members[k]; from = d2(P[m.a], tf) <= d2(P[m.b], tf) ? m.a : m.b;
         }
-        st[k] = { start: starts[j] + i * gap, dur: flight, mode: 'stroke', from, fl: j };
+        st[k] = { start: starts[j] + offs[i], dur: flight, mode: 'stroke', from, fl: j };
       });
       flowers.push({ start: starts[j], hold: starts[j] + closeAfter, quiet: starts[j] + closeAfter + breathDur });
     });
@@ -1406,8 +1658,11 @@ function makePlan() {
   const nodeFl = P.map((p, i) => flOf(strutOf[i]));
   const tugs = flowers.map(() => []);
   md.members.forEach((m, k) => { if (m.kind !== 's' && nodeFl[m.a] === nodeFl[m.b]) tugs[nodeFl[m.a]].push(cab[k].start + cab[k].reveal); });
+  // how many tugs overlap on average in each pattern (each lasts 2.4 s, sin^2 averages 1/2): the tug is divided by it,
+  // so a pattern draws in by one tug's depth as its threads take the strain, smoothly, however many threads it has
+  const conc = tugs.map(list => { if (!list.length) return 1; const lo = Math.min(...list), hi = Math.max(...list); return Math.max(1, 0.5 * list.length * 2.4 / (hi - lo + 2.4)); });
   const give = !reduce.matches ? {
-    flowers, tugs, rise: 1.8,
+    flowers, tugs, conc, rise: 1.8,
   } : null;
   return { st, cab, strutOf, nodeFl, end, caps, P, face: faceDir, holdUntil, breaths, ghostAt, zoom, give };
 }
@@ -1479,7 +1734,7 @@ function animFrame(t) {
     const envOf = f => t < f.hold ? ease((t - f.start) / gv.rise) : 1 - (1 - GIVE_REST) * ease((t - f.hold) / (f.quiet - f.hold));
     const envF = gv.flowers.map(envOf);
     // a thread taking the strain draws its pattern in once, smoothly, and lets go: no bounce
-    const tugF = gv.tugs.map(list => { let tug = 0; for (const t0 of list) { const u = t - t0; if (u > 0 && u < 2.4) tug -= 0.0025 * ANIM.give * Math.sin(Math.PI * u / 2.4) ** 2; } return tug; });
+    const tugF = gv.tugs.map((list, j) => { let tug = 0; for (const t0 of list) { const u = t - t0; if (u > 0 && u < 2.4) tug -= 0.0025 * ANIM.give * Math.sin(Math.PI * u / 2.4) ** 2; } return tug / gv.conc[j]; });
     const tg = t >= pl.end ? pl.end + (GIVE_T - (ANIM.endClock || GIVE_T)) : t;
     applyGive(out, tg, n => envF[pl.nodeFl[n]] || 0, Math.max(...envF), n => tugF[pl.nodeFl[n]] || 0);
   }
@@ -1523,7 +1778,7 @@ function animCaption() {
 function beginBuild() { // the build's state only, no UI (the build clip export uses this too)
   ANIM.plan = makePlan(); ANIM.on = true; ANIM.playing = true; ANIM.t = 0; ANIM.endClock = undefined;
   // turn the camera so the starting five-fold axis faces the viewer
-  const f = ANIM.plan.face;
+  const f = ANIM.plan.face && orient(ANIM.plan.face);
   if (f) { const r = Math.hypot(f[0], f[1]); ANIM.viewFrom = { yaw: S.view.yaw, pitch: S.view.pitch }; ANIM.viewTo = { yaw: Math.atan2(-f[0], -f[1]), pitch: Math.atan2(f[2], r) }; ANIM.viewT = 0; }
   else ANIM.viewTo = null;
 }
@@ -1568,7 +1823,7 @@ $('aPlay').onclick = () => {
 };
 $('aScrub').addEventListener('input', e => { if (!ANIM.plan) return; ANIM.playing = false; ANIM.t = ANIM.plan.end * e.target.value / 1000; animCaption(); });
 
-if (location.hash === '#noworker') window.__twDraw = () => { if (ANIM.plan) animCaption(); draw(); }; // test hook
+if (location.hash === '#noworker') { window.__twDraw = () => { if (ANIM.plan) animCaption(); draw(); }; window.__twPlan = () => ANIM.plan; } // test hooks
 
 // ---------- image and motion export (PNG, GIF, MP4) ----------
 // Frames are square and drawn off screen with the same draw() as the view, scaled so lines read as they
@@ -1596,10 +1851,47 @@ const baseName = () => 'tensegrity_' + ((S.shown && S.shown.name) || 'structure'
 const hexRgb = h => { const n = parseInt(h.replace('#', ''), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
 const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 // background for formats that need one: the artboard, or for Clear whichever suits the strut colour
-const solidBg = () => S.bg !== 'clear' ? BG_COLORS[S.bg] : (luma(hexRgb(colors.strut)) > 128 ? BG_COLORS.ink : BG_COLORS.paper);
-const exportFill = () => S.exportBg && S.bg !== 'clear' ? BG_COLORS[S.bg] : null;
+const artboardColour = () => toHex(colors.bg); // a picked colour, or the artboard's own
+const solidBg = () => S.bg !== 'clear' ? artboardColour() : (luma(hexRgb(colors.strut)) > 128 ? BG_COLORS.ink : BG_COLORS.paper);
+const exportFill = () => S.exportBg && S.bg !== 'clear' ? artboardColour() : null;
 const exportScale = size => size / 700;
 
+// SVG still: the same draw() as the view and the PNG, into a small stand-in for a canvas 2D context that writes
+// SVG instead of pixels (only the calls draw() and drawVE() use). Each stroke or fill becomes a path with its colour,
+// width, opacity and dash; arcs become circles; the background a rect. 1000 x 1000, lines scaled like a 700 px view.
+function svgContext(W, H) {
+  const out = [], stack = [], f = x => Math.round(x * 100) / 100, esc2 = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  let st = { globalAlpha: 1, strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, lineCap: 'butt', dash: [], font: '12px sans-serif' }, d = '';
+  const op = a => a < 0.999 ? ` opacity="${f(a)}"` : '';
+  const ctx = {
+    get globalAlpha() { return st.globalAlpha; }, set globalAlpha(v) { st.globalAlpha = v; },
+    get strokeStyle() { return st.strokeStyle; }, set strokeStyle(v) { st.strokeStyle = v; },
+    get fillStyle() { return st.fillStyle; }, set fillStyle(v) { st.fillStyle = v; },
+    get lineWidth() { return st.lineWidth; }, set lineWidth(v) { st.lineWidth = v; },
+    get lineCap() { return st.lineCap; }, set lineCap(v) { st.lineCap = v; },
+    get font() { return st.font; }, set font(v) { st.font = v; },
+    lineJoin: 'miter',
+    save() { stack.push({ ...st, dash: st.dash.slice() }); }, restore() { if (stack.length) st = stack.pop(); },
+    raw(str) { out.push(str); }, rect(x, y, w, h) { d += `M${f(x)} ${f(y)}h${f(w)}v${f(h)}h${f(-w)}Z`; },
+    setLineDash(a) { st.dash = a.slice(); },
+    beginPath() { d = ''; }, closePath() { d += 'Z'; },
+    moveTo(x, y) { d += `M${f(x)} ${f(y)}`; }, lineTo(x, y) { d += `L${f(x)} ${f(y)}`; },
+    arc(x, y, r) { d += `M${f(x + r)} ${f(y)}A${f(r)} ${f(r)} 0 1 0 ${f(x - r)} ${f(y)}A${f(r)} ${f(r)} 0 1 0 ${f(x + r)} ${f(y)}Z`; },
+    stroke() { if (d && st.globalAlpha > 0.002) out.push(`<path d="${d}" fill="none" stroke="${st.strokeStyle}" stroke-width="${f(st.lineWidth)}" stroke-linecap="${st.lineCap}"${st.dash.length ? ` stroke-dasharray="${st.dash.map(f).join(' ')}"` : ''}${op(st.globalAlpha)}/>`); },
+    fill() { if (d && st.globalAlpha > 0.002) out.push(`<path d="${d}" fill="${st.fillStyle}"${op(st.globalAlpha)}/>`); },
+    fillRect(x, y, w, h) { out.push(`<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" fill="${st.fillStyle}"${op(st.globalAlpha)}/>`); },
+    clearRect() {},
+    fillText(t, x, y) { const px = parseFloat(st.font) || 12; out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${f(px)}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" fill="${st.fillStyle}"${op(st.globalAlpha)}>${esc2(t)}</text>`); },
+  };
+  return { ctx, svg: () => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n${out.join('\n')}\n</svg>\n`, count: () => out.length };
+}
+$('exSvg').addEventListener('click', () => {
+  if (!S.result || exporting) return;
+  const size = 1000, sc = svgContext(size, size);
+  try { draw({ width: size, height: size }, sc.ctx, { d: exportScale(size), bg: exportFill(), clean: true }); }
+  catch (e) { console.error(e); toast('Couldn’t render the SVG.'); return; }
+  offer(`${baseName()}.svg`, new Blob([sc.svg()], { type: 'image/svg+xml' }));
+});
 $('exPng').addEventListener('click', () => {
   if (!S.result || exporting) return;
   const size = +$('pngSize').value, c = document.createElement('canvas'); c.width = c.height = size;
@@ -1609,9 +1901,18 @@ $('exPng').addEventListener('click', () => {
 });
 
 const BUILD_TAIL = 1.5; // seconds of the finished structure at the end of a build clip
+// Fly through: from the view's own zoom the camera eases in to Fly in to (30% of the time), holds there while the
+// structure keeps turning (40%), and eases back out (30%), on a log scale so the move feels even. The spin makes a
+// whole number of turns at about the Turn time, so the last frame leads back into the first.
+const flyTurns = T => Math.max(1, Math.round(T / S.turnSecs));
+function flyAt(u, z0) {
+  const a = 0.3, p = u < a ? ease(u / a) : u < 1 - a ? 1 : ease((1 - u) / a);
+  return { zoom: z0 * Math.pow(Math.max(S.flyZoom, z0) / z0, p), yaw: S.dir * 2 * Math.PI * flyTurns(S.flySecs) * u };
+}
 function clipPlan(kind, fps) {
   if (!S.result) return null;
   if (kind === 'turn') { const T = S.turnSecs; return { kind, T, n: Math.max(2, Math.round(T * fps)) }; }
+  if (kind === 'fly') { const T = S.flySecs; return { kind, T, n: Math.max(2, Math.round(T * fps)) }; }
   if (buildEnd === null) { try { buildEnd = makePlan().end; } catch (e) { return null; } }
   const veOn = S.ve && S.shown && S.shown.repeats; // the VE draws in after the sphere, in real time
   const T = buildEnd / ANIM.speed + BUILD_TAIL + (veOn ? VE_IN + 1 : 0);
@@ -1626,17 +1927,32 @@ function syncClip() {
   $('spinNote').textContent = `one turn every ${S.turnSecs} s, as exported`;
   $('exportBg').checked = S.exportBg;
   const p = clipPlan(S.clip, MP4_FPS);
-  $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360° · ${p.T} s` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
+  $('clipInfo').textContent = !p ? '' : p.kind === 'turn' ? `360° · ${p.T} s` : p.kind === 'fly' ? `${S.flyZoom}× · ${p.T} s · ${flyTurns(p.T)} turn${flyTurns(p.T) > 1 ? 's' : ''}` : `${p.T.toFixed(p.T < 10 ? 1 : 0)} s at ${$('aSpeedVal').textContent}`;
+  $('flyRows').hidden = S.clip !== 'fly';
+  $('flyZoom').value = S.flyZoom; $('flyZoomVal').textContent = `${S.flyZoom}× (${S.flyZoom >= 10 ? 'inside a sphere' : 'close'})`;
+  $('flySecs').value = S.flySecs; $('flySecsVal').textContent = `${S.flySecs} s`;
   $('exGif').disabled = !p || (busy && exporting.kind !== 'gif');
   $('exMp4').disabled = !p || (busy && exporting.kind !== 'mp4');
   $('gifRate').value = String(S.gifCs);
-  $('exPng').disabled = $('exFramer').disabled = $('webPreview').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
+  $('exPng').disabled = $('exSvg').disabled = $('exFramer').disabled = $('webPreview').disabled = $('motionSize').disabled = $('gifRate').disabled = busy;
 }
 document.querySelectorAll('input[name="clip"]').forEach(r => r.addEventListener('change', () => { S.clip = r.value; store.set('tw.clip', S.clip); syncClip(); }));
 $('turnSecs').addEventListener('input', e => { S.turnSecs = +e.target.value; store.set('tw.turn', String(S.turnSecs)); syncClip(); });
 $('exportBg').addEventListener('change', e => { S.exportBg = e.target.checked; store.set('tw.exportBg', S.exportBg ? '1' : '0'); });
 { const t = parseInt(store.get('tw.turn')); if (t >= 4 && t <= 40) S.turnSecs = t; }
-S.clip = store.get('tw.clip') === 'build' ? 'build' : 'turn';
+S.clip = ['build', 'fly'].includes(store.get('tw.clip')) ? store.get('tw.clip') : 'turn';
+try { const fl = JSON.parse(store.get('tw.fly') || '{}'); if (fl.zoom >= 2 && fl.zoom <= 40) S.flyZoom = +fl.zoom; if (fl.secs >= 6 && fl.secs <= 60) S.flySecs = +fl.secs; } catch (e) {}
+const saveFly = () => store.set('tw.fly', JSON.stringify({ zoom: S.flyZoom, secs: S.flySecs }));
+$('flyZoom').addEventListener('input', e => { S.flyZoom = +e.target.value; saveFly(); syncClip(); });
+$('flySecs').addEventListener('input', e => { S.flySecs = +e.target.value; saveFly(); syncClip(); });
+// live preview of the fly path in the view (the export uses the same path)
+const FLY = { on: false, t: 0, z0: 1, yaw0: 0 };
+function stopFly() { if (!FLY.on) return; FLY.on = false; S.view.zoom = FLY.z0; $('flyPreview').textContent = 'Preview in the view'; }
+$('flyPreview').addEventListener('click', () => {
+  if (FLY.on) { stopFly(); return; }
+  if (!S.result) return;
+  Object.assign(FLY, { on: true, t: 0, z0: S.view.zoom, yaw0: S.view.yaw }); $('flyPreview').textContent = 'Stop preview';
+});
 S.exportBg = store.get('tw.exportBg') !== '0';
 $('gifRate').addEventListener('change', e => { S.gifCs = +e.target.value; store.set('tw.gifCs', String(S.gifCs)); if (typeof iconSync === 'function') iconSync(); });
 { const g = parseInt(store.get('tw.gifCs')); if ([2, 3, 4, 5, 6, 8, 10].includes(g)) S.gifCs = g; }
@@ -1664,10 +1980,12 @@ function setProgress(u, label) {
 function framer(plan, fps, size) {
   const d = exportScale(size);
   if (plan.kind === 'turn') {
-    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T;
+    const yaw0 = S.view.yaw, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T, wob0 = WOB_T;
+    const wobCycles = S.wobble ? Math.max(1, Math.round(plan.T / (4 * Math.PI))) : 0; // whole wobbles per turn, so it loops
     return i => {
       const u = i / plan.n;
-      S.view.yaw = yaw0 + 2 * Math.PI * u;
+      S.view.yaw = yaw0 + S.dir * 2 * Math.PI * u;
+      if (wobCycles) WOB_T = wob0 + u * wobCycles * 4 * Math.PI;
       let base;
       if (gives) { // blend with the pose one turn earlier: at u = 1 this is exactly frame 0 again
         const A = idlePose(t0 + u * plan.T), B = idlePose(t0 + u * plan.T - plan.T);
@@ -1675,6 +1993,19 @@ function framer(plan, fps, size) {
       }
       // the VE: a continuous cycle fits the turn a whole number of times; otherwise shown fully drawn
       return { d, still: true, clean: true, base, veT: S.veLoop ? ve0 + u * plan.T : Math.max(ve0, VE_IN) };
+    };
+  }
+  if (plan.kind === 'fly') {
+    const yaw0 = S.view.yaw, z0 = S.view.zoom, t0 = GIVE_T + IDLE_OFF, gives = idleGives(), ve0 = VE_T, wob0 = WOB_T;
+    const wobCycles = S.wobble ? Math.max(1, Math.round(plan.T / (4 * Math.PI))) : 0;
+    const veSpan = S.veLoop ? veCycle() * Math.max(1, Math.round(plan.T / veCycle())) : 0; // whole VE cycles, so it loops
+    return i => {
+      const u = i / plan.n, f = flyAt(u, z0);
+      S.view.yaw = yaw0 + f.yaw; S.view.zoom = f.zoom;
+      if (wobCycles) WOB_T = wob0 + u * wobCycles * 4 * Math.PI;
+      let base;
+      if (gives) { const A = idlePose(t0 + u * plan.T), B = idlePose(t0 + u * plan.T - plan.T); base = A.map((p, k) => [0, 1, 2].map(j => p[j] * (1 - u) + B[k][j] * u)); }
+      return { d, still: true, clean: true, base, veT: S.veLoop ? ve0 + u * veSpan : Math.max(ve0, VE_IN) };
     };
   }
   beginBuild();
@@ -1691,7 +2022,8 @@ async function runExport(kind) {
   if (!plan) return;
   const size = +$('motionSize').value;
   // everything a clip moves, so the view comes back exactly as it was
-  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, result: S.result,
+  stopFly();
+  const saved = { view: { ...S.view }, fitR: fit.r, GIVE_T, IDLE_OFF, VE_T, WOB_T, SPIN_V, result: S.result,
     anim: { on: ANIM.on, playing: ANIM.playing, t: ANIM.t, plan: ANIM.plan, viewT: ANIM.viewT, viewFrom: ANIM.viewFrom, viewTo: ANIM.viewTo, endClock: ANIM.endClock } };
   exporting = { kind, cancel: false };
   const btn = kind === 'gif' ? $('exGif') : $('exMp4');
@@ -1709,7 +2041,7 @@ async function runExport(kind) {
       blob = kind === 'gif' ? await encodeGif(lib, plan, c, cx, frame, fps) : await encodeMp4(lib, plan, c, cx, frame, fps);
     }
   } catch (e) { failed = e; console.error(e); }
-  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T;
+  S.view = saved.view; fit.r = saved.fitR; GIVE_T = saved.GIVE_T; IDLE_OFF = saved.IDLE_OFF; VE_T = saved.VE_T; WOB_T = saved.WOB_T; SPIN_V = saved.SPIN_V;
   if (S.result === saved.result) Object.assign(ANIM, saved.anim);
   else if (ANIM.on) stopBuild(); // a new solve arrived meanwhile: the old build no longer fits
   if (ANIM.on && ANIM.plan) animCaption();
@@ -1854,10 +2186,7 @@ function iconViews() { // rebuild the view menu for this structure, keeping the 
 const ICON_ROCK = 28 * Math.PI / 180, ICON_KEYS = { rock: 40, turn: 72 };
 function iconBasis() {
   const view = $('iconView').value;
-  if (view === 'shown') {
-    const cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
-    return { u: [cy, -sy, 0], w: [sp * sy, sp * cy, cp], v: [-cp * sy, -cp * cy, sp] };
-  }
+  if (view === 'shown') return viewBasis(false);
   const ax = symmetryAxes().find(x => 'ax' + x.n === view);
   const v = view === 'top' ? [0, 0, 1] : view === 'front' ? [0, -1, 0] : ax ? ax.a : [0, 0, 1];
   const ref = Math.abs(v[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
@@ -1980,7 +2309,7 @@ function framerData() {
   const r = S.result, md = S.model, c = centroid(r.P);
   let R = 0; r.P.forEach(p => R = Math.max(R, Math.hypot(...sub3(p, c))));
   const r4 = v => Math.round(v * 1e4) / 1e4, r3 = v => Math.round(v * 1e3) / 1e3;
-  const P = []; r.P.forEach(p => P.push(r4((p[0] - c[0]) / R), r4((p[1] - c[1]) / R), r4((p[2] - c[2]) / R)));
+  const P = []; r.P.forEach(p => { const q = orient(sub3(p, c)); P.push(r4(q[0] / R), r4(q[1] / R), r4(q[2] / R)); });
   const M = []; md.members.forEach(m => M.push(m.a, m.b, m.kind === 's' ? 1 : 0));
   let pl = null; try { pl = makePlan(); } catch (e) { pl = null; }
   const B = md.members.map((m, k) => {
@@ -1990,7 +2319,7 @@ function framerData() {
   });
   let sl = 0, sn = 0; md.members.forEach((m, k) => { if (m.kind === 's') { sl += r.lengths[k]; sn++; } });
   return { name: S.shown.name, P, M, B, end: pl ? r3(pl.end) : 0, strut: r4(sn ? sl / sn / R : 0.3),
-    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch) }, interact: { ...S.web },
+    view: { yaw: r4(S.view.yaw), pitch: r4(S.view.pitch), roll: S.roll, dir: S.dir }, interact: { ...S.web, strutWidth: Math.round(S.strutW * 100) },
     style: { background: exportFill() || 'rgba(0, 0, 0, 0)', strut: colors.strut, cable: colors.cable, highlight: colors.sel,
       turn: S.turnSecs, shade: Math.round(S.shade * 100), cableOpacity: Math.round(Math.min(1, S.cable) * 100) } };
 }
@@ -2132,10 +2461,12 @@ if (store.get('tw.full') === '1') setFull(true); else setDetails(store.get('tw.d
 
 // ---------- display ----------
 function setShade(v) { S.shade = v; $('shade').value = Math.round(v * 100); $('shVal').textContent = Math.round(v * 100) + '%'; store.set('tw.shade', String(v)); }
+function setStrutB(v) { S.strutB = v; $('strutB').value = Math.round(v * 100); $('sbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.strutB', String(v)); }
+$('strutB').addEventListener('input', e => setStrutB(+e.target.value / 100));
 function setCable(v) { S.cable = v; $('cable').value = Math.round(v * 100); $('cbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.cable', String(v)); }
 $('shade').addEventListener('input', e => setShade(+e.target.value / 100));
 $('cable').addEventListener('input', e => setCable(+e.target.value / 100));
-{ const a = parseFloat(store.get('tw.shade')), b = parseFloat(store.get('tw.cable')); setShade(a >= 0 && a <= 1.5 ? a : 1); setCable(b >= 0.2 && b <= 2 ? b : 1); }
+{ const a = parseFloat(store.get('tw.shade')), b = parseFloat(store.get('tw.cable')); setShade(a >= 0 && a <= 1.5 ? a : 1); setCable(b >= 0.2 && b <= 2 ? b : 1); const sb = parseFloat(store.get('tw.strutB')); setStrutB(sb >= 0.2 && sb <= 2 ? sb : 1); }
 
 let last = performance.now();
 function frame(t) {
@@ -2146,16 +2477,26 @@ function frame(t) {
   try { draw(); } catch (e) { /* skip this frame */ }
 }
 // advance the camera, the build and the give by dt seconds (ui: update the build caption and scrubber)
+// The spin speed eases to where it is heading (time constant 1.2 s): from the slow drift while the first pattern forms
+// to the full turn, and on Rotate off, Reverse, Turn time changes and after a drag. It used to jump in one frame.
+let SPIN_V = null;
 function step(dt, ui) {
   const holding = ANIM.on && ANIM.plan && ANIM.t < ANIM.plan.holdUntil;
+  const turning = ANIM.on && ANIM.viewTo && ANIM.viewT < 1 && !drag;
+  const spinTo = S.spin && !drag && !turning && !FLY.on ? S.dir * (holding ? 0.03 : 2 * Math.PI / S.turnSecs) : 0;
+  SPIN_V = SPIN_V === null ? spinTo : SPIN_V + (spinTo - SPIN_V) * (1 - Math.exp(-dt / 1.2));
   if (ANIM.on && ANIM.viewTo && ANIM.viewT < 1 && !drag) {
     ANIM.viewT = Math.min(1, ANIM.viewT + dt * ANIM.speed / 0.9);
     const e = ease(ANIM.viewT), a = ANIM.viewFrom, b = ANIM.viewTo;
     let dy = ((b.yaw - a.yaw) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
     S.view.yaw = a.yaw + dy * e; S.view.pitch = a.pitch + (b.pitch - a.pitch) * e;
-  } else if (S.spin && !drag) S.view.yaw += dt * (holding ? 0.03 : 2 * Math.PI / S.turnSecs); // one turn per Turn length, as exported
+  } else if (FLY.on) { // previewing the fly-through clip: its own zoom and turn, then back to where it began
+    FLY.t += dt; const u = FLY.t / S.flySecs;
+    if (u >= 1) { S.view.yaw = FLY.yaw0 + flyAt(1, FLY.z0).yaw; stopFly(); }
+    else { const f = flyAt(u, FLY.z0); S.view.zoom = f.zoom; S.view.yaw = FLY.yaw0 + f.yaw; }
+  } else if (!drag) S.view.yaw += dt * SPIN_V; // eased to one turn per Turn length, as exported
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
-  GIVE_T += dt; VE_T += dt;
+  GIVE_T += dt; VE_T += dt; WOB_T += dt;
   if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }
 }
 requestAnimationFrame(frame);
@@ -2288,8 +2629,7 @@ function copyText(get, what) {
 }
 function thumbSVG() { // a tiny flat drawing of the shape as it is shown, struts only, for the list
   if (!S.result) return '';
-  const P = S.result.P, c = centroid(P), cy = Math.cos(S.view.yaw), sy = Math.sin(S.view.yaw), cp = Math.cos(S.view.pitch), sp = Math.sin(S.view.pitch);
-  const u = [cy, -sy, 0], w = [sp * sy, sp * cy, cp], Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w)]; });
+  const P = S.result.P, c = centroid(P), { u, w } = viewBasis(false), Q = P.map(p => { const d = sub3(p, c); return [dot3(d, u), dot3(d, w)]; });
   let R = 0; Q.forEach(q => R = Math.max(R, Math.hypot(...q)));
   const k = 10 / (R || 1), f = x => Math.round(x * 10) / 10;
   const d = S.model.members.filter(m => m.kind === 's').map(m => `M${f(12 + Q[m.a][0] * k)} ${f(12 - Q[m.a][1] * k)}L${f(12 + Q[m.b][0] * k)} ${f(12 - Q[m.b][1] * k)}`).join('');
