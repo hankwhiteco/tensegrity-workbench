@@ -196,6 +196,8 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 /* push-button rows with indicator lamps: radio inputs + labels, or buttons with aria-pressed */
 .seg { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg.four { grid-template-columns: repeat(4, 1fr); }
+#labelBox textarea { height: 64px; margin-top: 8px; }
 #axisSeg { grid-template-columns: repeat(var(--n, 4), 1fr); }
 .seg label, .seg button { position: relative; display: grid; justify-items: center; gap: 2px; padding: 15px 4px 8px; cursor: pointer;
              text-align: center; font: 500 12px/1.2 var(--font); border: 0; border-radius: 3px; background: var(--well); color: var(--fg);
@@ -500,7 +502,16 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           <span class="meta"><span class="name">Forces</span><span class="count">width shows each member's load</span></span><span class="sw"></span></label>
         <label class="layer"><input type="checkbox" id="bNodes">
           <svg viewBox="0 0 34 22"><circle cx="9" cy="14" r="2.2" stroke-width="1.2"/><path d="M14 8 L14 3 M14 3 L12 5 M19 3 L19 8 M17 3 L21 3" stroke-width="1"/></svg>
-          <span class="meta"><span class="name">Node ids</span><span class="count">number every joint</span></span><span class="sw"></span></label>
+          <span class="meta"><span class="name">Node labels</span><span class="count">numbers, or words at spread-out joints</span></span><span class="sw"></span></label>
+        <div id="labelBox" hidden>
+          <div class="seg four" role="radiogroup" aria-label="Node labels">
+            <input type="radio" name="lbm" id="lbm_num" value="num" checked><label for="lbm_num">Numbers</label>
+            <input type="radio" name="lbm" id="lbm_ind" value="ind"><label for="lbm_ind">Industries</label>
+            <input type="radio" name="lbm" id="lbm_role" value="role"><label for="lbm_role">Roles</label>
+            <input type="radio" name="lbm" id="lbm_own" value="own"><label for="lbm_own">Own</label>
+          </div>
+          <textarea class="out" id="labelList" aria-label="Label words, one per line" placeholder="One label per line"></textarea>
+        </div>
         <label class="layer" id="scaleWrap"><input type="checkbox" id="bScale" checked>
           <svg viewBox="0 0 34 22"><circle cx="10" cy="11" r="5" stroke-width="1.2"/><circle cx="23" cy="11" r="8.5" stroke-width="1.2"/></svg>
           <span class="meta"><span class="name">Fixed scale</span><span class="count">sphere grows with repeats</span></span><span class="sw"></span></label>
@@ -824,7 +835,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, ve: false, veAxes: true, veLoop: false, strutB: 1, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, labelMode: 'num', labelOwn: '', ve: false, veAxes: true, veLoop: false, strutB: 1, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -1282,10 +1293,45 @@ function draw(c = cv, cx = ctx, o = {}) {
     ctx.globalAlpha = 1;
   }
   if (S.ve && S.shown && S.shown.repeats) drawVE(ctx, d, o.veT !== undefined ? o.veT : veTime());
-  if (S.nodes) {
+  if (S.nodes && S.labelMode === 'num') {
     ctx.font = `${11 * d}px "IBM Plex Mono", monospace`; ctx.fillStyle = colors.text;
     P.forEach((p, i) => ctx.fillText(i, p[0] + 5 * d, p[1] - 5 * d));
-  }
+  } else if (S.nodes) drawWordLabels(ctx, d, P, near, zmin, zmax);
+}
+// Word labels (Simconverse brand kit W1: industries and roles; label type PP Neue Montreal Mono 500, uppercase,
+// 0.12em tracking, in the accent orange). Each word sits on its own joint, the joints spread as far apart as they go
+// (farthest-point picks on the finished shape, so a word stays on its joint as it turns); far ones fade.
+const LABEL_SETS = {
+  ind: ['Life sciences', 'Corporate training', 'Hospitals', 'Health networks', 'Higher education'],
+  role: ['Chief commercial officer', 'VP of sales', 'Sales director', 'VP of marketing', 'Marketing director', 'VP of training', 'Training director'],
+};
+const labelWords = () => (S.labelMode === 'own' ? S.labelOwn : (LABEL_SETS[S.labelMode] || []).join('\n')).split('\n').map(w => w.trim()).filter(Boolean);
+let LABEL_PICK = { key: null, at: [] };
+function labelJoints(n) {
+  const Q = S.result.P, key = S.result.P.length + ':' + n + ':' + S.result.P[0].join();
+  if (LABEL_PICK.key === key) return LABEL_PICK.at;
+  // start at the joint nearest the top, then keep taking the joint farthest from all picked so far
+  let first = 0; Q.forEach((p, i) => { if (p[2] > Q[first][2]) first = i; });
+  const at = [first], dmin = Q.map(p => TG.dist(p, Q[first]));
+  while (at.length < Math.min(n, Q.length)) { let b = -1; dmin.forEach((v, i) => { if (b < 0 || v > dmin[b]) b = i; }); at.push(b); Q.forEach((p, i) => { dmin[i] = Math.min(dmin[i], TG.dist(p, Q[b])); }); }
+  LABEL_PICK = { key, at }; return at;
+}
+function drawWordLabels(ctx, d, P, near, zmin, zmax) {
+  const words = labelWords(); if (!words.length) return;
+  const at = labelJoints(words.length), px = 10 * d;
+  ctx.font = `500 ${px}px "PP Neue Montreal Mono", "IBM Plex Mono", ui-monospace, monospace`;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${(0.12 * px).toFixed(2)}px`;
+  ctx.fillStyle = colors.sel;
+  at.forEach((j, i) => {
+    const p = P[j]; if (!p || p[3] <= near) return;
+    const t = zmax > zmin ? (p[2] - zmin) / (zmax - zmin) : 0;
+    ctx.globalAlpha = 1 - 0.7 * t;
+    ctx.beginPath(); ctx.arc(p[0], p[1], 2.2 * d, 0, 2 * Math.PI); ctx.fill();
+    // words on the right half run leftward from their joint, so they stay on the artboard
+    const w = words[i].toUpperCase(), left = p[0] > PW / 2;
+    ctx.fillText(w, left ? p[0] - 7 * d - ctx.measureText(w).width : p[0] + 7 * d, p[1] - 6 * d);
+  });
+  ctx.globalAlpha = 1; if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
 // Image inside: a picture at the structure's centre, drawn between the far and near members (draw() calls it at the
 // centre's depth). Faces you = flat to the view (screen right and up); Turns with it = a panel in the structure's own
@@ -1476,7 +1522,7 @@ cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; s
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
 function toggle(id, key, after) { const b = $(id); b.checked = S[key]; b.addEventListener('change', () => { S[key] = b.checked; after && after(); }); }
-toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes'); toggle('bVE', 've', () => { if (S.ve) VE_T = 0; legend(); syncVE(); }); toggle('bVEAx', 'veAxes'); toggle('bVELoop', 'veLoop', () => { VE_T = S.veLoop ? 0 : Math.max(VE_T, VE_IN); syncVE(); });
+toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes', syncLabels); toggle('bVE', 've', () => { if (S.ve) VE_T = 0; legend(); syncVE(); }); toggle('bVEAx', 'veAxes'); toggle('bVELoop', 'veLoop', () => { VE_T = S.veLoop ? 0 : Math.max(VE_T, VE_IN); syncVE(); });
 function syncVE() {
   $('veAxWrap').hidden = $('veLoopWrap').hidden = !(S.ve && S.family === 'sphere');
   if (S.turnSecs) { const P = veCycle(), k = Math.round(S.turnSecs / P); $('veLoopNote').textContent = `one cycle every ${+P.toFixed(1)} s, ${k} per turn`; }
@@ -1870,6 +1916,8 @@ function svgContext(W, H) {
     get lineWidth() { return st.lineWidth; }, set lineWidth(v) { st.lineWidth = v; },
     get lineCap() { return st.lineCap; }, set lineCap(v) { st.lineCap = v; },
     get font() { return st.font; }, set font(v) { st.font = v; },
+    measureText(t) { const px = parseFloat((/(\d+(?:\.\d+)?)px/.exec(st.font) || [0, 12])[1]); return { width: String(t).length * (0.6 * px + (parseFloat(st.letterSpacing) || 0)) }; },
+    get letterSpacing() { return st.letterSpacing || '0px'; }, set letterSpacing(v) { st.letterSpacing = v; },
     lineJoin: 'miter',
     save() { stack.push({ ...st, dash: st.dash.slice() }); }, restore() { if (stack.length) st = stack.pop(); },
     raw(str) { out.push(str); }, rect(x, y, w, h) { d += `M${f(x)} ${f(y)}h${f(w)}v${f(h)}h${f(-w)}Z`; },
@@ -1881,7 +1929,8 @@ function svgContext(W, H) {
     fill() { if (d && st.globalAlpha > 0.002) out.push(`<path d="${d}" fill="${st.fillStyle}"${op(st.globalAlpha)}/>`); },
     fillRect(x, y, w, h) { out.push(`<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" fill="${st.fillStyle}"${op(st.globalAlpha)}/>`); },
     clearRect() {},
-    fillText(t, x, y) { const px = parseFloat(st.font) || 12; out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${f(px)}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" fill="${st.fillStyle}"${op(st.globalAlpha)}>${esc2(t)}</text>`); },
+    fillText(t, x, y) { const m = /(\d+(?:\.\d+)?)px\s+(.*)$/.exec(st.font || ''), px = m ? +m[1] : 12, fam = m ? m[2].replace(/"/g, "'") : 'Helvetica Neue, Helvetica, Arial, sans-serif', wt = /^(\d00)\s/.exec(st.font || ''), ls = parseFloat(st.letterSpacing) || 0;
+      out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${f(px)}" font-family="${fam}"${wt ? ` font-weight="${wt[1]}"` : ''}${ls ? ` letter-spacing="${f(ls)}"` : ''} fill="${st.fillStyle}"${op(st.globalAlpha)}>${esc2(t)}</text>`); },
   };
   return { ctx, svg: () => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n${out.join('\n')}\n</svg>\n`, count: () => out.length };
 }
@@ -2461,6 +2510,15 @@ if (store.get('tw.full') === '1') setFull(true); else setDetails(store.get('tw.d
 
 // ---------- display ----------
 function setShade(v) { S.shade = v; $('shade').value = Math.round(v * 100); $('shVal').textContent = Math.round(v * 100) + '%'; store.set('tw.shade', String(v)); }
+function syncLabels() { $('labelBox').hidden = !S.nodes; $('labelList').readOnly = S.labelMode !== 'own'; $('labelList').value = labelWords().join('\n'); }
+document.querySelectorAll('input[name="lbm"]').forEach(r => r.addEventListener('change', () => {
+  if (!r.checked) return;
+  if (r.value === 'own' && !S.labelOwn) S.labelOwn = labelWords().join('\n'); // start Own from the list on show
+  S.labelMode = r.value; store.set('tw.labels', JSON.stringify({ mode: S.labelMode, own: S.labelOwn })); syncLabels();
+}));
+$('labelList').addEventListener('input', () => { if (S.labelMode !== 'own') return; S.labelOwn = $('labelList').value; store.set('tw.labels', JSON.stringify({ mode: S.labelMode, own: S.labelOwn })); });
+try { const l = JSON.parse(store.get('tw.labels') || '{}'); if (['num', 'ind', 'role', 'own'].includes(l.mode)) S.labelMode = l.mode; if (typeof l.own === 'string') S.labelOwn = l.own; } catch (e) {}
+$('lbm_' + S.labelMode).checked = true; syncLabels();
 function setStrutB(v) { S.strutB = v; $('strutB').value = Math.round(v * 100); $('sbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.strutB', String(v)); }
 $('strutB').addEventListener('input', e => setStrutB(+e.target.value / 100));
 function setCable(v) { S.cable = v; $('cable').value = Math.round(v * 100); $('cbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.cable', String(v)); }
