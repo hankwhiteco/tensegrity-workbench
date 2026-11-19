@@ -2559,15 +2559,15 @@ function drawWordLabels(ctx, d, P, near, zmin, zmax, fr) {
   ctx.font = `500 ${px}px "PP Neue Montreal Mono", "IBM Plex Mono", ui-monospace, monospace`;
   if ('letterSpacing' in ctx) ctx.letterSpacing = `${(0.12 * px).toFixed(2)}px`;
   ctx.fillStyle = S.labelCol || colors.strut;
-  // every word is shown: with more words than joints, the extra words stack under the first ones, line by line
-  words.forEach((word, i) => {
-    const j = at[i % at.length], line = Math.floor(i / at.length), p = P[j]; if (!p || p[3] <= near) return;
+  // one word per joint at most: with more words than joints, the words left over are not shown
+  at.forEach((j, i) => {
+    const word = words[i], p = P[j]; if (!p || p[3] <= near) return;
     const t = zmax > zmin ? (p[2] - zmin) / (zmax - zmin) : 0;
     ctx.globalAlpha = (1 - 0.7 * t) * (shown ? Math.min(1, shown[j]) : 1); if (ctx.globalAlpha < 0.01) return;
-    if (!line) { ctx.beginPath(); ctx.arc(p[0], p[1], 2.2 * d, 0, 2 * Math.PI); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(p[0], p[1], 2.2 * d, 0, 2 * Math.PI); ctx.fill();
     // words on the right half run leftward from their joint, so they stay on the artboard
     const w = word.toUpperCase(), left = p[0] > PW / 2;
-    ctx.fillText(w, left ? p[0] - 7 * d - ctx.measureText(w).width : p[0] + 7 * d, p[1] - 6 * d + line * 1.5 * px);
+    ctx.fillText(w, left ? p[0] - 7 * d - ctx.measureText(w).width : p[0] + 7 * d, p[1] - 6 * d);
   });
   ctx.globalAlpha = 1; if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
