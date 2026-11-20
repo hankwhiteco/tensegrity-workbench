@@ -638,7 +638,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
       <div class="exports">
-        <button class="btn" id="exSvg" title="The view as vector lines: same shading, colours and weights">SVG still</button>
+        <button class="btn" id="exSvg" title="Copies the view as SVG to paste into Figma: same shading, colours and weights">Copy SVG</button>
       </div>
       <label class="check"><input type="checkbox" id="exportBg" checked><span>Include artboard background</span><small>off = transparent PNG and GIF</small></label>
     </section>
@@ -2004,7 +2004,10 @@ $('exSvg').addEventListener('click', () => {
   const size = 1000, sc = svgContext(size, size);
   try { draw({ width: size, height: size }, sc.ctx, { d: exportScale(size), bg: exportFill(), clean: true }); }
   catch (e) { console.error(e); toast('Couldn’t render the SVG.'); return; }
-  offer(`${baseName()}.svg`, new Blob([sc.svg()], { type: 'image/svg+xml' }));
+  // copied, to paste straight into Figma; if the clipboard is refused, it downloads instead
+  const svg = sc.svg(), btn = $('exSvg'), flash = t => { btn.textContent = t; setTimeout(() => btn.textContent = 'Copy SVG', 1600); };
+  const fallback = () => { offer(`${baseName()}.svg`, new Blob([svg], { type: 'image/svg+xml' })); flash('Downloaded'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(svg).then(() => flash('Copied'), fallback); else fallback();
 });
 $('exPng').addEventListener('click', () => {
   if (!S.result || exporting) return;
