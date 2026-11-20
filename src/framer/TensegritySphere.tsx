@@ -123,7 +123,7 @@ export default function TensegritySphere(props) {
             for (const k of order) {
                 const a = M[3 * k], b = M[3 * k + 1], strut = M[3 * k + 2] === 1, q = B[k]
                 let x0 = proj[3 * a], y0 = proj[3 * a + 1], x1 = proj[3 * b], y1 = proj[3 * b + 1]
-                let alpha = 1, width = strut ? rod : 1.1, tip = false
+                let alpha = 1, width = strut ? Math.max(1.1, rod) : 1.1, tip = false // struts never thinner than a cable
                 if (!built) {
                     if (strut) {
                         const r = ease((t - q[0]) / q[1])
@@ -151,7 +151,7 @@ export default function TensegritySphere(props) {
                 let col = strut ? strutC : cableC
                 if (p.hover && k === st.hover) { col = hiC; a1 = 1 }
                 ctx.globalAlpha = a1; ctx.strokeStyle = col
-                ctx.lineWidth = width * d * (strut ? Math.max(0.2, 1 - 0.35 * shade * depth) : 1)
+                ctx.lineWidth = width * d * (strut ? Math.max(Math.min(1, 1.1 / width), 1 - 0.35 * shade * depth) : 1)
                 ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke()
                 if (p.hover && k !== st.hover && near.has(k)) { ctx.globalAlpha = 0.55 * alpha; ctx.strokeStyle = hiC; ctx.stroke() }
                 if (tip) { ctx.globalAlpha = 0.9; ctx.fillStyle = strutC; ctx.beginPath(); ctx.arc(x1, y1, 1.6 * d, 0, TAU); ctx.fill() }
@@ -264,7 +264,7 @@ TensegritySphere.defaultProps = {
     highlightColor: S.highlight || "#ff4e02", scrollRotate: or(I.scrollRotate, false), scrollDegrees: or(I.scrollDegrees, 90), spin: or(I.spin, true), turnSeconds: S.turn || 35, drag: or(I.drag, true),
     inertia: or(I.inertia, true), tilt: or(I.tilt, true), tiltAmount: or(I.tiltAmount, 8), hover: or(I.hover, true),
     scrollBuild: or(I.scrollBuild, true), buildStart: or(I.buildStart, 95), buildEnd: or(I.buildEnd, 35),
-    depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: 100,
+    depthShading: S.shade || 100, cableOpacity: S.cableOpacity || 100, zoom: or(I.zoom, 100), strutWidth: or(I.strutWidth, 100),
 }
 const D = TensegritySphere.defaultProps
 
@@ -288,5 +288,5 @@ addPropertyControls(TensegritySphere, {
     depthShading: { type: ControlType.Number, title: "Depth shading", min: 0, max: 150, step: 5, unit: "%", defaultValue: D.depthShading },
     cableOpacity: { type: ControlType.Number, title: "Cables", min: 20, max: 100, step: 5, unit: "%", defaultValue: Math.min(100, D.cableOpacity) },
     zoom: { type: ControlType.Number, title: "Size", min: 40, max: 160, step: 1, unit: "%", defaultValue: D.zoom },
-    strutWidth: { type: ControlType.Number, title: "Strut width", min: 40, max: 250, step: 5, unit: "%", defaultValue: D.strutWidth },
+    strutWidth: { type: ControlType.Number, title: "Strut width", min: 0, max: 250, step: 5, unit: "%", defaultValue: D.strutWidth },
 })
