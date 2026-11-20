@@ -558,7 +558,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <input type="radio" name="bg" id="bg_paper" value="paper"><label for="bg_paper">Paper</label>
         <input type="radio" name="bg" id="bg_clear" value="clear"><label for="bg_clear">Clear</label>
       </div>
-      <div class="row"><label for="strutW">Strut weight</label><span class="val" id="strutWVal"></span><input type="range" id="strutW" min="25" max="300" step="5" value="100"></div>
+      <div class="row"><label for="strutW">Strut weight</label><span class="val" id="strutWVal"></span><input type="range" id="strutW" min="0" max="300" step="5" value="100"></div>
       <div class="row"><span class="lbl">Colours</span><button type="button" class="linkbtn" id="colReset" title="Back to the artboard's own colours">Reset</button></div>
       <div class="colours colours3">
         <label class="f">Struts<input type="color" id="colStrut" aria-label="Strut colour"></label>
@@ -638,7 +638,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
         <select id="pngSize" aria-label="PNG size"><option value="2048" selected>2048</option><option value="4096">4096</option><option value="1024">1024</option></select>
       </div>
       <div class="exports">
-        <button class="btn" id="exSvg" title="The view as vector lines: same shading, colours and weights">SVG still</button>
+        <button class="btn" id="exSvg" title="Copies the view as SVG to paste into Figma: same shading, colours and weights">Copy SVG</button>
       </div>
       <label class="check"><input type="checkbox" id="exportBg" checked><span>Include artboard background</span><small>off = transparent PNG and GIF</small></label>
     </section>
@@ -1266,7 +1266,9 @@ function draw(c = cv, cx = ctx, o = {}) {
     // zoomed in, rods take their true thickness (1/40 of their length) in perspective, so near ones fill out and
     // far ones stay readable; cables thicken a little up close. Blended in from 1x to 2x.
     const pp = fit.r * 4.2 / Math.max(s.cz, near), rodTrue = Math.max(1.2, Math.min(80, fit.strut * Math.min(W, H) * 0.40 / fit.r * pp / 40 / d)) * S.strutW;
-    let col = isS ? colors.strut : colors.cable, w = isS ? rod + (rodTrue - rod) * zk : 1.1 * (zk ? Math.max(0.6, Math.min(3, Math.pow(Dc / Math.max(s.cz, near), zk) * 1.5)) : 1);
+    // struts never go thinner than a cable; at 0% they are exactly cable weight
+    const cw = 1.1 * (zk ? Math.max(0.6, Math.min(3, Math.pow(Dc / Math.max(s.cz, near), zk) * 1.5)) : 1);
+    let col = isS ? colors.strut : colors.cable, w = isS ? Math.max(cw, rod + (rodTrue - rod) * zk) : cw;
     if (S.force) { col = isS ? colors.com : colors.ten; w = isS ? 2 + 6 * f : 0.6 + 2.8 * f; }
     if (s.k === sel || s.k === hov) { col = colors.sel; }
     if (!isS && v.q[s.k] <= 1e-9) { ctx.setLineDash([4 * d, 4 * d]); } else ctx.setLineDash([]);
@@ -1275,7 +1277,7 @@ function draw(c = cv, cx = ctx, o = {}) {
     if (!isS && S.cable > 1 && !S.force && col === colors.cable) col = mixColor(colors.cable, colors.strut, Math.min(1, S.cable - 1));
     // struts above 100%: toward white on dark artboards, toward black on Paper (the most contrast either way)
     if (isS && S.strutB > 1 && !S.force && col === colors.strut) col = mixColor(colors.strut, S.bg === 'paper' ? '#000000' : '#ffffff', 0.85 * Math.min(1, S.strutB - 1));
-    ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : (fr ? fr.cw[s.k] : 1));
+    ctx.strokeStyle = col; ctx.lineWidth = w * d * (isS ? (S.force ? Math.max(0.2, 1 - 0.35 * S.shade * depth) : Math.max(cw / w, 1 - 0.35 * S.shade * depth)) : (fr ? fr.cw[s.k] : 1));
     ctx.beginPath();
     const cv3 = fr && fr.curve[s.k], sk3 = fr && fr.stroke[s.k];
     if (sk3) { // strut drawing itself out from a joint
@@ -1613,7 +1615,7 @@ function syncMotion() {
   $('tiltDeg').value = tilt; $('tiltVal').textContent = `${tilt}\u00b0 ${tilt >= 0 ? 'from above' : 'from below'}`;
   $('rollDeg').value = S.roll; $('rollVal').textContent = S.roll ? `${S.roll}\u00b0` : 'none';
   $('wobble').value = S.wobble; $('wobbleVal').textContent = S.wobble ? `\u00b1${S.wobble}\u00b0` : 'off';
-  $('strutW').value = Math.round(S.strutW * 100); $('strutWVal').textContent = Math.round(S.strutW * 100) + '%';
+  $('strutW').value = Math.round(S.strutW * 100); $('strutWVal').textContent = S.strutW ? Math.round(S.strutW * 100) + '%' : 'cable';
 }
 $('dirFwd').addEventListener('click', () => { S.dir = 1; syncMotion(); saveMotion(); });
 $('dirRev').addEventListener('click', () => { S.dir = -1; syncMotion(); saveMotion(); });
@@ -1623,7 +1625,7 @@ $('wobble').addEventListener('input', e => { S.wobble = +e.target.value; syncMot
 $('strutW').addEventListener('input', e => { S.strutW = +e.target.value / 100; syncMotion(); saveMotion(); });
 try { const m = JSON.parse(store.get('tw.motion') || '{}');
   if (typeof m.axis === 'string') S.axis = m.axis; if (m.dir === -1) S.dir = -1;
-  if (m.roll >= -180 && m.roll <= 180) S.roll = +m.roll; if (m.wobble >= 0 && m.wobble <= 30) S.wobble = +m.wobble; if (m.strutW >= 0.25 && m.strutW <= 3) S.strutW = +m.strutW; } catch (e) {}
+  if (m.roll >= -180 && m.roll <= 180) S.roll = +m.roll; if (m.wobble >= 0 && m.wobble <= 30) S.wobble = +m.wobble; if (m.strutW >= 0 && m.strutW <= 3) S.strutW = +m.strutW; } catch (e) {}
 function legend() {
   $('legend').innerHTML = S.force
     ? `<span><i style="background:var(--vp-compress)"></i>compression</span><span><i style="background:var(--vp-tension);height:2px"></i>tension (width = force)</span>`
@@ -2004,7 +2006,10 @@ $('exSvg').addEventListener('click', () => {
   const size = 1000, sc = svgContext(size, size);
   try { draw({ width: size, height: size }, sc.ctx, { d: exportScale(size), bg: exportFill(), clean: true }); }
   catch (e) { console.error(e); toast('Couldn’t render the SVG.'); return; }
-  offer(`${baseName()}.svg`, new Blob([sc.svg()], { type: 'image/svg+xml' }));
+  // copied, to paste straight into Figma; if the clipboard is refused, it downloads instead
+  const svg = sc.svg(), btn = $('exSvg'), flash = t => { btn.textContent = t; setTimeout(() => btn.textContent = 'Copy SVG', 1600); };
+  const fallback = () => { offer(`${baseName()}.svg`, new Blob([svg], { type: 'image/svg+xml' })); flash('Downloaded'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(svg).then(() => flash('Copied'), fallback); else fallback();
 });
 $('exPng').addEventListener('click', () => {
   if (!S.result || exporting) return;
