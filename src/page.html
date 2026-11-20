@@ -482,6 +482,21 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           <svg viewBox="0 0 34 22"><path d="M5 11 A12 7 0 1 0 17 4" stroke-width="1.4"/><path d="M14 1.5 L17.5 4 L14 6.8" stroke-width="1.4"/></svg>
           <span class="meta"><span class="name">Rotate</span><span class="count" id="spinNote">one turn about the vertical</span></span><span class="sw"></span></label>
       </div>
+      <div id="mouseBox" hidden>
+        <div class="row"><span class="lbl">Mouse</span><span class="val">same as the website export</span></div>
+        <div class="layers">
+          <label class="layer"><input type="checkbox" id="mInertia">
+            <svg viewBox="0 0 34 22"><path d="M4 11 H22" stroke-width="1.3"/><path d="M24 11 H27 M29 11 H30" stroke-width="1.3"/></svg>
+            <span class="meta"><span class="name">Inertia</span><span class="count">a flick runs on and slows down</span></span><span class="sw"></span></label>
+          <label class="layer"><input type="checkbox" id="mTilt">
+            <svg viewBox="0 0 34 22"><circle cx="15" cy="11" r="8" stroke-width="1.2"/><path d="M26 5 L31 3 M28 9 L32 9" stroke-width="1.2"/></svg>
+            <span class="meta"><span class="name">Cursor tilt</span><span class="count">leans toward the mouse</span></span><span class="sw"></span></label>
+          <label class="layer" data-accent><input type="checkbox" id="mHover">
+            <svg viewBox="0 0 34 22"><path d="M5 18 L25 4" stroke-width="2.4"/><path d="M22 14 L26 20 L27 15 L32 15 Z" stroke-width="1"/></svg>
+            <span class="meta"><span class="name">Hover highlight</span><span class="count">the member under the pointer</span></span><span class="sw"></span></label>
+        </div>
+        <div class="row" id="mTiltRow"><label for="mTiltAmt">Tilt amount</label><span class="val" id="mTiltVal"></span><input type="range" id="mTiltAmt" min="0" max="30" step="1"></div>
+      </div>
       <div class="row"><span class="lbl">Spin axis</span><span class="val" id="axisNote"></span></div>
       <div class="seg" id="axisSeg" role="group" aria-label="Spin axis"></div>
       <div class="seg" role="group" aria-label="Spin direction">
@@ -1152,17 +1167,23 @@ function orientation() {
 }
 const orient = d => { const R = orientation(); return R ? [dot3(R[0], d), dot3(R[1], d), dot3(R[2], d)] : d; };
 const unorient = q => { const R = orientation(); return R ? [0, 1, 2].map(k => q[0] * R[0][k] + q[1] * R[1][k] + q[2] * R[2][k]) : q; };
-const wobbleNow = () => S.wobble ? S.wobble * Math.PI / 180 * Math.sin(WOB_T * 0.5) : 0;
+// wobble belongs to Rotate: with Rotate off it eases out (WOB_A) and the structure holds still
+let WOB_A = 1;
+// cursor tilt (Rotate off, Mouse settings): the structure leans toward the pointer, eased; never in exports
+const TILT = { y: 0, p: 0, ty: 0, tp: 0 };
+const tiltOn = () => !exporting && !S.spin && S.web.tilt;
+const wobbleNow = () => (S.wobble ? WOB_A * S.wobble * Math.PI / 180 * Math.sin(WOB_T * 0.5) : 0) + (exporting ? 0 : TILT.p);
+const yawNow = () => S.view.yaw + (exporting ? 0 : TILT.y);
 // the camera's screen right (u), up (w) and toward-the-viewer (v) directions in the structure's own frame
 function viewBasis(withWobble) {
-  const yaw = S.view.yaw, pitch = S.view.pitch + (withWobble ? wobbleNow() : 0), cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const yaw = withWobble ? yawNow() : S.view.yaw, pitch = S.view.pitch + (withWobble ? wobbleNow() : 0), cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
   let u = [cy, -sy, 0], w = [sp * sy, sp * cy, cp]; const v = [-cp * sy, -cp * cy, sp];
   const ro = S.roll * Math.PI / 180, cr = Math.cos(ro), sr = Math.sin(ro);
   [u, w] = [u.map((x, k) => x * cr - w[k] * sr), u.map((x, k) => x * sr + w[k] * cr)];
   return { u: unorient(u), w: unorient(w), v: unorient(v) };
 }
 function project(p) {
-  const { yaw, zoom } = S.view, pitch = S.view.pitch + wobbleNow();
+  const { zoom } = S.view, yaw = yawNow(), pitch = S.view.pitch + wobbleNow();
   let [x, y, z] = orient([p[0] - fit.c[0], p[1] - fit.c[1], p[2] - fit.c[2]]);
   // z-up world: yaw about z, then pitch about x
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -1533,17 +1554,30 @@ function pick(mx, my) {
   return best;
 }
 let drag = null;
-cv.addEventListener('pointerdown', e => { if (exporting) return; stopFly(); drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
+const FLICK = { vy: 0, vp: 0 };
+addEventListener('pointermove', e => { // cursor tilt aims at the pointer anywhere on the page, relative to the artboard's centre
+  if (!tiltOn()) return; const b = cv.getBoundingClientRect(), a = S.web.tiltAmount * Math.PI / 180;
+  const nx = Math.max(-1, Math.min(1, (e.clientX - b.left - b.width / 2) / (b.width / 2))), ny = Math.max(-1, Math.min(1, (e.clientY - b.top - b.height / 2) / (b.height / 2)));
+  TILT.ty = nx * a; TILT.tp = ny * a;
+});
+cv.addEventListener('pointerdown', e => { if (exporting) return; stopFly(); FLICK.vy = FLICK.vp = 0; drag = { x: e.clientX, y: e.clientY, moved: 0, t: performance.now(), vy: 0, vp: 0 }; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => {
   const b = cv.getBoundingClientRect();
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy);
     drag.x = e.clientX; drag.y = e.clientY;
-    if (drag.moved > 3) { cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.48, Math.min(1.48, S.view.pitch + dy * 0.008)); syncMotion(); }
-  } else { hover = ANIM.on ? -1 : pick(e.clientX - b.left, e.clientY - b.top); }
+    if (drag.moved > 3) {
+      cv.classList.add('drag'); S.view.yaw += dx * 0.008; S.view.pitch = Math.max(-1.48, Math.min(1.48, S.view.pitch + dy * 0.008)); syncMotion();
+      // drag speed (rad/s), smoothed, for a flick to run on after release
+      const now = performance.now(), dts = Math.max(1, now - drag.t) / 1000, k = Math.min(1, dts / 0.05); drag.t = now;
+      drag.vy += (dx * 0.008 / dts - drag.vy) * k; drag.vp += (dy * 0.008 / dts - drag.vp) * k;
+    }
+  } else { hover = ANIM.on || (!S.spin && !S.web.hover) ? -1 : pick(e.clientX - b.left, e.clientY - b.top); }
 });
 cv.addEventListener('pointerup', e => {
   cv.classList.remove('drag');
+  // inertia (Rotate off, Mouse settings): a flick runs on; held still before letting go = no flick
+  if (drag && drag.moved > 3 && !S.spin && S.web.inertia && performance.now() - drag.t < 80) { FLICK.vy = drag.vy; FLICK.vp = drag.vp; }
   if (drag && drag.moved <= 3 && !ANIM.on) { const b = cv.getBoundingClientRect(); S.sel = pick(e.clientX - b.left, e.clientY - b.top); renderSel(); }
   drag = null;
 });
@@ -1553,7 +1587,7 @@ cv.addEventListener('wheel', e => { e.preventDefault(); if (exporting) return; s
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 if (reduce.matches) S.spin = false;
 function toggle(id, key, after) { const b = $(id); b.checked = S[key]; b.addEventListener('change', () => { S[key] = b.checked; after && after(); }); }
-toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin'); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes', syncLabels); toggle('bVE', 've', () => { if (S.ve) VE_T = 0; legend(); syncVE(); }); toggle('bVEAx', 'veAxes'); toggle('bVELoop', 'veLoop', () => { VE_T = S.veLoop ? 0 : Math.max(VE_T, VE_IN); syncVE(); });
+toggle('bScale', 'fixedScale', () => S.result && fitView()); toggle('bSpin', 'spin', () => { mouseSync(); if (S.spin) FLICK.vy = FLICK.vp = 0; }); toggle('bForce', 'force', legend); toggle('bNodes', 'nodes', syncLabels); toggle('bVE', 've', () => { if (S.ve) VE_T = 0; legend(); syncVE(); }); toggle('bVEAx', 'veAxes'); toggle('bVELoop', 'veLoop', () => { VE_T = S.veLoop ? 0 : Math.max(VE_T, VE_IN); syncVE(); });
 function syncVE() {
   $('veAxWrap').hidden = $('veLoopWrap').hidden = !(S.ve && S.family === 'sphere');
   if (S.turnSecs) { const P = veCycle(), k = Math.round(S.turnSecs / P); $('veLoopNote').textContent = `one cycle every ${+P.toFixed(1)} s, ${k} per turn`; }
@@ -2475,7 +2509,16 @@ function wvSync() {
   $('wvStartRow').hidden = $('wvEndRow').hidden = $('wvScrollNote').hidden = !w.scrollBuild;
   store.set('tw.web', JSON.stringify(w));
   if (f && f.__render) f.__render(w);
+  mouseSync();
 }
+function mouseSync() {
+  const w = S.web; $('mouseBox').hidden = S.spin;
+  $('mInertia').checked = w.inertia; $('mTilt').checked = w.tilt; $('mHover').checked = w.hover;
+  $('mTiltAmt').value = w.tiltAmount; $('mTiltVal').textContent = w.tiltAmount + '\u00b0'; $('mTiltRow').hidden = !w.tilt;
+}
+[['mInertia', 'inertia'], ['mTilt', 'tilt'], ['mHover', 'hover']].forEach(([id, k]) => $(id).addEventListener('change', e => { S.web[k] = e.target.checked; wvSync(); }));
+$('mTiltAmt').addEventListener('input', e => { S.web.tiltAmount = +e.target.value; wvSync(); });
+mouseSync();
 [['wvRot', 'scrollRotate'], ['wvSpin', 'spin'], ['wvDrag', 'drag'], ['wvInertia', 'inertia'], ['wvTilt', 'tilt'], ['wvHover', 'hover'], ['wvScroll', 'scrollBuild']]
   .forEach(([id, k]) => $(id).addEventListener('change', e => { S.web[k] = e.target.checked; wvSync(); }));
 [['wvRotDeg', 'scrollDegrees'], ['wvTiltAmt', 'tiltAmount'], ['wvStart', 'buildStart'], ['wvEnd', 'buildEnd'], ['wvZoom', 'zoom']]
@@ -2597,6 +2640,16 @@ function step(dt, ui) {
     if (u >= 1) { S.view.yaw = FLY.yaw0 + flyAt(1, FLY.z0).yaw; stopFly(); }
     else { const f = flyAt(u, FLY.z0); S.view.zoom = f.zoom; S.view.yaw = FLY.yaw0 + f.yaw; }
   } else if (!drag) S.view.yaw += dt * SPIN_V; // eased to one turn per Turn length, as exported
+  if (!drag && (FLICK.vy || FLICK.vp)) { // a flick runs on and slows down (e^-2.2t, as in the website component)
+    if (S.spin) FLICK.vy = FLICK.vp = 0;
+    S.view.yaw += FLICK.vy * dt; S.view.pitch = Math.max(-1.48, Math.min(1.48, S.view.pitch + FLICK.vp * dt));
+    const k = Math.exp(-2.2 * dt); FLICK.vy *= k; FLICK.vp *= k;
+    if (Math.abs(FLICK.vy) + Math.abs(FLICK.vp) < 0.002) FLICK.vy = FLICK.vp = 0;
+    if (ui) syncMotion();
+  }
+  WOB_A += ((S.spin ? 1 : 0) - WOB_A) * (1 - Math.exp(-dt / 0.8));
+  if (!tiltOn()) TILT.ty = TILT.tp = 0;
+  { const k = 1 - Math.exp(-dt * 4); TILT.y += (TILT.ty - TILT.y) * k; TILT.p += (TILT.tp - TILT.p) * k; }
   fit.r += (fit.target - fit.r) * (1 - Math.exp(-dt * 5));
   GIVE_T += dt; VE_T += dt; WOB_T += dt;
   if (ANIM.on && ANIM.playing) { ANIM.t = Math.min(ANIM.plan.end, ANIM.t + dt * ANIM.speed); if (ANIM.t >= ANIM.plan.end) { ANIM.playing = false; ANIM.endClock = GIVE_T; } if (ui) animCaption(); }
