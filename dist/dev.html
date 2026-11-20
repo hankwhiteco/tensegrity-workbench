@@ -519,6 +519,18 @@ input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
           </div>
           <div class="row"><span class="lbl">Label colour</span><button type="button" class="linkbtn" id="labelColReset" title="Back to the strut colour (cream)">Reset</button></div>
           <div class="colours"><input type="color" id="labelCol" value="#e3dec9" aria-label="Label colour"></div>
+          <div class="row"><span class="lbl">Points</span></div>
+          <div class="seg three" role="radiogroup" aria-label="Point shape">
+            <input type="radio" name="lbp" id="lbp_circle" value="circle" checked><label for="lbp_circle">Circle</label>
+            <input type="radio" name="lbp" id="lbp_square" value="square"><label for="lbp_square">Square</label>
+            <input type="radio" name="lbp" id="lbp_none" value="none"><label for="lbp_none">None</label>
+          </div>
+          <div class="row">
+            <label for="pointSize">Point size</label><span class="val" id="psVal">4 px</span>
+            <input type="range" id="pointSize" min="2" max="24" step="1" value="4">
+          </div>
+          <div class="row"><span class="lbl">Point colour</span><button type="button" class="linkbtn" id="pointColReset" title="Back to the label colour">Reset</button></div>
+          <div class="colours"><input type="color" id="pointCol" value="#e3dec9" aria-label="Point colour"></div>
           <textarea class="out" id="labelList" aria-label="Label words, one per line" placeholder="One label per line"></textarea>
         </div>
         <label class="layer" id="scaleWrap"><input type="checkbox" id="bScale" checked>
@@ -2067,7 +2079,7 @@ const S = {
   family: 'sphere', n: 3, k: 4, f: 2, pat: 'geo', fixedScale: true, chir: 1, units: 'cm', dia: 1.2,
   struct: null, over: {}, sel: -1, groupMem: {},
   result: null, verify: null, model: null,
-  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, labelMode: 'num', labelOwn: '', labelSize: 9, labelCol: '', ve: false, veAxes: true, veLoop: false, strutB: 1, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
+  view: { yaw: 0.6, pitch: -0.35, zoom: 1 }, spin: true, force: false, nodes: false, labelMode: 'num', labelOwn: '', labelSize: 9, labelCol: '', pointShape: 'circle', pointSize: 4, pointCol: '', ve: false, veAxes: true, veLoop: false, strutB: 1, inner: { size: 0.7, op: 1, shape: 'circle', mode: 'face' }, flyZoom: 20, flySecs: 16, axis: 'v', dir: 1, roll: 0, wobble: 0, strutW: 1, shade: 1, cable: 1,
   bg: 'ink', clip: 'turn', turnSecs: 35, exportBg: true, gifCs: 5,
 };
 const BASE = 20; // default cable length in user units
@@ -2558,16 +2570,20 @@ function drawWordLabels(ctx, d, P, near, zmin, zmax, fr) {
   const at = labelJoints(words.length), px = S.labelSize * d;
   ctx.font = `500 ${px}px "PP Neue Montreal Mono", "IBM Plex Mono", ui-monospace, monospace`;
   if ('letterSpacing' in ctx) ctx.letterSpacing = `${(0.12 * px).toFixed(2)}px`;
-  ctx.fillStyle = S.labelCol || colors.strut;
+  const labelFill = S.labelCol || colors.strut, pointFill = S.pointCol || labelFill, ps = S.pointSize * d, half = ps / 2;
+  const gap = (S.pointShape === 'none' ? 0 : half) + 0.6 * px; // text starts just clear of the point
   // one word per joint at most: with more words than joints, the words left over are not shown
   at.forEach((j, i) => {
     const word = words[i], p = P[j]; if (!p || p[3] <= near) return;
     const t = zmax > zmin ? (p[2] - zmin) / (zmax - zmin) : 0;
     ctx.globalAlpha = (1 - 0.7 * t) * (shown ? Math.min(1, shown[j]) : 1); if (ctx.globalAlpha < 0.01) return;
-    ctx.beginPath(); ctx.arc(p[0], p[1], 2.2 * d, 0, 2 * Math.PI); ctx.fill();
-    // words on the right half run leftward from their joint, so they stay on the artboard
+    ctx.fillStyle = pointFill;
+    if (S.pointShape === 'circle') { ctx.beginPath(); ctx.arc(p[0], p[1], half, 0, 2 * Math.PI); ctx.fill(); }
+    else if (S.pointShape === 'square') ctx.fillRect(p[0] - half, p[1] - half, ps, ps);
+    // the word sits level with its point (caps centred on it); on the right half it runs leftward, so it stays on the artboard
     const w = word.toUpperCase(), left = p[0] > PW / 2;
-    ctx.fillText(w, left ? p[0] - 7 * d - ctx.measureText(w).width : p[0] + 7 * d, p[1] - 6 * d);
+    ctx.fillStyle = labelFill;
+    ctx.fillText(w, left ? p[0] - gap - ctx.measureText(w).width : p[0] + gap, p[1] + 0.36 * px);
   });
   ctx.globalAlpha = 1; if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
@@ -3754,14 +3770,21 @@ document.querySelectorAll('input[name="lbm"]').forEach(r => r.addEventListener('
   if (r.value === 'own' && !S.labelOwn) S.labelOwn = labelWords().join('\n'); // start Own from the list on show
   S.labelMode = r.value; saveLabels(); syncLabels();
 }));
-const saveLabels = () => store.set('tw.labels', JSON.stringify({ mode: S.labelMode, own: S.labelOwn, size: S.labelSize, col: S.labelCol }));
+const saveLabels = () => store.set('tw.labels', JSON.stringify({ mode: S.labelMode, own: S.labelOwn, size: S.labelSize, col: S.labelCol, pShape: S.pointShape, pSize: S.pointSize, pCol: S.pointCol }));
+function setPointSize(v) { S.pointSize = v; $('pointSize').value = v; $('psVal').textContent = v + ' px'; }
+$('pointSize').addEventListener('input', () => { setPointSize(+$('pointSize').value); saveLabels(); });
+$('pointCol').addEventListener('input', () => { S.pointCol = $('pointCol').value; saveLabels(); });
+$('pointColReset').addEventListener('click', () => { S.pointCol = ''; $('pointCol').value = $('labelCol').value; saveLabels(); });
+document.querySelectorAll('input[name="lbp"]').forEach(r => r.addEventListener('change', () => { if (r.checked) { S.pointShape = r.value; saveLabels(); } }));
 function setLabelSize(v) { S.labelSize = v; $('labelSize').value = v; $('lsVal').textContent = v + ' px'; }
 $('labelSize').addEventListener('input', () => { setLabelSize(+$('labelSize').value); saveLabels(); });
-$('labelCol').addEventListener('input', () => { S.labelCol = $('labelCol').value; saveLabels(); });
-$('labelColReset').addEventListener('click', () => { S.labelCol = ''; $('labelCol').value = toHex(colors.strut); saveLabels(); });
+$('labelCol').addEventListener('input', () => { S.labelCol = $('labelCol').value; if (!S.pointCol) $('pointCol').value = S.labelCol; saveLabels(); });
+$('labelColReset').addEventListener('click', () => { S.labelCol = ''; $('labelCol').value = toHex(colors.strut); if (!S.pointCol) $('pointCol').value = $('labelCol').value; saveLabels(); });
 $('labelList').addEventListener('input', () => { if (S.labelMode !== 'own') return; S.labelOwn = $('labelList').value; saveLabels(); });
-try { const l = JSON.parse(store.get('tw.labels') || '{}'); if (['num', 'ind', 'role', 'all', 'own'].includes(l.mode)) S.labelMode = l.mode; if (typeof l.own === 'string') S.labelOwn = l.own; if (l.size >= 6 && l.size <= 28) S.labelSize = l.size; if (/^#[0-9a-f]{6}$/i.test(l.col || '')) S.labelCol = l.col; } catch (e) {}
+try { const l = JSON.parse(store.get('tw.labels') || '{}'); if (['num', 'ind', 'role', 'all', 'own'].includes(l.mode)) S.labelMode = l.mode; if (typeof l.own === 'string') S.labelOwn = l.own; if (l.size >= 6 && l.size <= 28) S.labelSize = l.size; if (/^#[0-9a-f]{6}$/i.test(l.col || '')) S.labelCol = l.col;
+  if (['circle', 'square', 'none'].includes(l.pShape)) S.pointShape = l.pShape; if (l.pSize >= 2 && l.pSize <= 24) S.pointSize = l.pSize; if (/^#[0-9a-f]{6}$/i.test(l.pCol || '')) S.pointCol = l.pCol; } catch (e) {}
 setLabelSize(S.labelSize); $('labelCol').value = S.labelCol || '#e3dec9';
+setPointSize(S.pointSize); $('pointCol').value = S.pointCol || $('labelCol').value; $('lbp_' + S.pointShape).checked = true;
 $('lbm_' + S.labelMode).checked = true; syncLabels();
 function setStrutB(v) { S.strutB = v; $('strutB').value = Math.round(v * 100); $('sbVal').textContent = Math.round(v * 100) + '%'; store.set('tw.strutB', String(v)); }
 $('strutB').addEventListener('input', e => setStrutB(+e.target.value / 100));
